@@ -732,24 +732,22 @@ elif st.session_state.step == 'handwriting':
     st.markdown("<br>", unsafe_allow_html=True)
 
     records = st.session_state.records
-    if not records:
-        st.warning("Belum ada data scan.")
-        if st.button("← Scan"):
-            st.session_state.step = 'scan'
-            st.rerun()
-        st.stop()
-
+    
     c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
-        if st.button("← Setup", width='stretch'):
-            st.session_state.step = 'setup'
+        if st.button("← Scan", width='stretch'):
+            st.session_state.step = 'scan'
             st.rerun()
     with c2:
-        if st.button("Lihat Hasil →", disabled=len(st.session_state.records) == 0, width='stretch'):
+        if st.button("Lihat Hasil →", disabled=len(records) == 0, width='stretch'):
             st.session_state.step = 'results'
             st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
+    
+    if not records:
+        st.info("📁 Belum ada data scan. Kembali ke **Scan** untuk upload/ambil foto.")
+        st.stop()
 
     if st.session_state.bundle is None:
         with st.spinner("Loading SVM model..."):
