@@ -70,7 +70,6 @@ def show_heatmap(
         ax_img  = fig.add_subplot(gs[0])
         ax_heat = fig.add_subplot(gs[1])
 
-        # ── Panel kiri: gambar ROI ──────────────────────────────
         if len(roi_img.shape) == 2:
             ax_img.imshow(roi_img, cmap='gray')
         else:
@@ -80,7 +79,6 @@ def show_heatmap(
     else:
         fig, ax_heat = plt.subplots(figsize=(10, 6))
 
-    # ── Panel kanan: heatmap ────────────────────────────────────
     im = ax_heat.imshow(
         density_map,
         aspect='auto',
@@ -165,3 +163,45 @@ def show_heatmap_jawaban(
 
         soal_done  += soal_di_blok
         row_offset += soal_di_blok
+
+
+def show_handwriting(roi_img, ocr_text, label_name="Handwriting"):
+    """
+    Menampilkan crop ROI tulisan tangan di kiri, hasil OCR di kanan.
+
+    Parameters
+    ----------
+    roi_img     : np.ndarray  — gambar crop BGR dari ROI tulisan tangan
+    ocr_text    : str         — hasil OCR/ekstraksi text
+    label_name  : str         — nama field (misal "Nama Mata Kuliah", "Kode Kelas", dll)
+    """
+    fig = plt.figure(figsize=(12, 4))
+    gs  = gridspec.GridSpec(1, 2, width_ratios=[1, 1], figure=fig)
+    ax_img = fig.add_subplot(gs[0])
+    ax_txt = fig.add_subplot(gs[1])
+
+    if len(roi_img.shape) == 2:
+        ax_img.imshow(roi_img, cmap='gray')
+    else:
+        ax_img.imshow(cv2.cvtColor(roi_img, cv2.COLOR_BGR2RGB))
+    ax_img.set_title(f"ROI {label_name}", fontsize=11, fontweight='bold')
+    ax_img.axis('off')
+
+    ax_txt.axis('off')
+    result_text = ocr_text if ocr_text else "—"
+    ax_txt.text(
+        0.5, 0.5,
+        result_text,
+        fontsize=18,
+        fontweight='bold',
+        ha='center',
+        va='center',
+        transform=ax_txt.transAxes,
+        family='monospace',
+        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5),
+    )
+    ax_txt.set_title(f"OCR Result: {label_name}", fontsize=11, fontweight='bold')
+
+    plt.tight_layout()
+    st.pyplot(fig)
+    plt.close(fig)
