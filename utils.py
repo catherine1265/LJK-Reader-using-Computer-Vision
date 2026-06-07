@@ -1,13 +1,12 @@
 import cv2
 import matplotlib.pyplot as plt
-
+import streamlit as st 
 
 def print_step(step, msg):
-    print(f"  [{step}] {msg}")
-
+    print(f" [{step}] {msg}")
 
 def show(img, title='', cmap=None, size=(10, 8)):
-    plt.figure(figsize=size)
+    fig = plt.figure(figsize=size)
     if len(img.shape) == 2:
         plt.imshow(img, cmap='gray')
     else:
@@ -15,8 +14,10 @@ def show(img, title='', cmap=None, size=(10, 8)):
     plt.title(title, fontsize=13, fontweight='bold')
     plt.axis('off')
     plt.tight_layout()
-    plt.show()
-
+    
+    # Renders the plot inside the web browser instead of a pop-up window
+    st.pyplot(fig)
+    plt.close(fig)
 
 def show_row(images, titles, size=(18, 5)):
     n = len(images)
@@ -28,7 +29,10 @@ def show_row(images, titles, size=(18, 5)):
             ax.imshow(img, cmap='gray')
         else:
             ax.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        ax.set_title(title, fontsize=10, fontweight='bold')
+        ax.set_title(title, fontsize=13, fontweight='bold')
         ax.axis('off')
     plt.tight_layout()
-    plt.show()
+    
+    # Renders the rows inside the web browser instead of a pop-up window
+    st.pyplot(fig)
+    plt.close(fig)
