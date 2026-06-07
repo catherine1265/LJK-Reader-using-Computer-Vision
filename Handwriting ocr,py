@@ -3,7 +3,6 @@ import re
 import pickle
 import cv2
 import numpy as np
-import tensorflow_datasets as tfds
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -59,6 +58,8 @@ def augment_char(img, n=30):
 
 
 def load_or_train():
+    import tensorflow_datasets as tfds
+    
     if os.path.exists(MODEL_PATH):
         print('Model ditemukan, loading...')
         with open(MODEL_PATH, 'rb') as f:
