@@ -22,6 +22,3 @@ plotly>=5.18.0
 # Network
 requests>=2.31.0
 
-# Deep Learning & Datasets (Dibutuhkan oleh handwriting_ocr.py)
-tensorflow>=2.15.0
-tensorflow-datasets>=4.9.0
