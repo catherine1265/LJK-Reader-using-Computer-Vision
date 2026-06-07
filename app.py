@@ -9,6 +9,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 
+# ─── IMPORT MODULES ─────────────────────────────────────────
 from config import ALL_ROIS
 from corner_detection import find_corner_bubbles, warp_perspective
 from bubble_detection import detect_nama, detect_nim, detect_tanggal, detect_answers
@@ -428,11 +429,9 @@ with st.sidebar:
 
         grade_counts = {'A':0,'B':0,'C':0,'D':0,'E':0}
         for s in scores:
-            if s>=80: grade_counts['A']+=1
-            elif s>=70: grade_counts['B']+=1
-            elif s>=60: grade_counts['C']+=1
-            elif s>=50: grade_counts['D']+=1
-            else: grade_counts['E']+=1
+            g = grade_from_score(s)
+            if g in grade_counts:
+                grade_counts[g]+=1
         grade_colors = {'A':'#6DBF9E','B':'#7CA4D4','C':'#D4A96A','D':'#E07575','E':'#9B7E7E'}
         for g, cnt in grade_counts.items():
             if cnt == 0: continue
@@ -939,7 +938,6 @@ elif st.session_state.step == 'results':
             st.pyplot(fig); plt.close(fig)
 
         with col_ch2:
-            # Gunakan grade_from_score dari eda.py (threshold: 85/75/65/55)
             grade_dist = {'A (≥85)':0,'B (75-84)':0,'C (65-74)':0,'D (55-64)':0,'E (<55)':0}
             for s in scores:
                 g = grade_from_score(s)
