@@ -773,17 +773,15 @@ elif st.session_state.step == 'handwriting':
                     nim_text,     density_nim      = detect_nim(warped)
                     tgl_text,     density_tanggal  = detect_tanggal(warped)
 
-                    x1, y1, x2, y2 = ALL_ROIS['KODE_KELAS']
-                    roi_kode        = warped[y1:y2, x1:x2]
-                    x1, y1, x2, y2 = ALL_ROIS['KODE_KELAS']
-                    roi_kode = warped[y1:y2, x1:x2]
-                    kode_text, _, _ = predict_text(roi_kode, bundle, label='KODE_KELAS')
-                    kode_text = postprocess('KODE_KELAS', kode_text)
-                    
                     x1, y1, x2, y2 = ALL_ROIS['NAMA_MATA_KULIAH']
                     roi_matkul = warped[y1:y2, x1:x2]
                     matkul_text, _, _ = predict_text(roi_matkul, bundle, label='NAMA_MATA_KULIAH')
                     matkul_text = postprocess('NAMA_MATA_KULIAH', matkul_text)
+                    
+                    x1, y1, x2, y2 = ALL_ROIS['KODE_KELAS']
+                    roi_kode = warped[y1:y2, x1:x2]
+                    kode_text, _, _ = predict_text(roi_kode, bundle, label='KODE_KELAS')
+                    kode_text = postprocess('KODE_KELAS', kode_text)
                     
                     x1, y1, x2, y2 = ALL_ROIS['RUANGAN']
                     roi_ruangan = warped[y1:y2, x1:x2]
@@ -863,6 +861,8 @@ elif st.session_state.step == 'handwriting':
         
         # Handwriting Recognition section
         st.markdown('<div class="section-label">Tulisan Tangan (Handwriting OCR)</div>', unsafe_allow_html=True)
+        from utils import show_handwriting
+        
         hw_col1, hw_col2 = st.columns(2)
         with hw_col1:
             show_handwriting(
