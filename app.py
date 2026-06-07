@@ -84,7 +84,14 @@ h1, h2, h3 { font-family: 'DM Serif Display', serif !important; color: var(--cre
   line-height: 1.15;
   letter-spacing: -0.02em;
 }
-.serif-title span { color: var(--cream); font-style: italic; background: linear-gradient(135deg, #EAE0CF, #7288AE); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.serif-title span {
+  color: var(--cream);
+  font-style: italic;
+  background: linear-gradient(135deg, #EAE0CF, #7288AE);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 .section-label {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.68rem;
@@ -176,12 +183,12 @@ h1, h2, h3 { font-family: 'DM Serif Display', serif !important; color: var(--cre
   text-transform: uppercase;
   color: var(--text-dim);
 }
-.c-blue   { color: #7CA4D4; }
-.c-green  { color: #6DBF9E; }
-.c-red     { color: #E07575; }
-.c-grey   { color: #7288AE; }
-.c-amber  { color: #D4A96A; }
-.c-cream  { color: var(--cream); }
+.c-blue  { color: #7CA4D4; }
+.c-green { color: #6DBF9E; }
+.c-red   { color: #E07575; }
+.c-grey  { color: #7288AE; }
+.c-amber { color: #D4A96A; }
+.c-cream { color: var(--cream); }
 
 .answer-grid {
   display: grid;
@@ -312,12 +319,17 @@ hr { border-color: rgba(74,86,148,0.2) !important; }
 
 .prog-bar-wrap { margin: 6px 0; }
 .prog-bar-label {
-  display: flex; justify-content: space-between;
-  font-size: 0.72rem; color: var(--text-dim); margin-bottom: 3px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-bottom: 3px;
 }
 .prog-bar-bg {
   background: rgba(74,86,148,0.15);
-  border-radius: 4px; height: 6px; overflow: hidden;
+  border-radius: 4px;
+  height: 6px;
+  overflow: hidden;
 }
 .prog-bar-fill { height: 100%; border-radius: 4px; transition: width .6s ease; }
 
@@ -330,15 +342,15 @@ hr { border-color: rgba(74,86,148,0.2) !important; }
 # ─── SESSION STATE ───────────────────────────────────────────
 def init_state():
     defaults = {
-        'answer_key':   {},
-        'total_soal':   50,
-        'sesi_nama':    '',
-        'kode_kelas':   '',
-        'kode_dosen':   '',
-        'records':      [],
-        'step':         'setup',
-        'key_text':     '',
-        'bundle':       None,  # SVM model
+        'answer_key': {},
+        'total_soal': 50,
+        'sesi_nama':  '',
+        'kode_kelas': '',
+        'kode_dosen': '',
+        'records':    [],
+        'step':       'setup',
+        'key_text':   '',
+        'bundle':     None,  # SVM model
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -346,14 +358,18 @@ def init_state():
 
 init_state()
 
-DEFAULT_50 = ['B','C','A','D','E','A','B','C','D','A','E','B','C','A','D','B','E','A','C','D',
-              'A','B','E','C','D','B','A','D','C','E','A','C','B','D','E','C','A','B','D','E',
-              'B','D','A','C','E','A','D','B','E','C']
+DEFAULT_50 = [
+    'B', 'C', 'A', 'D', 'E', 'A', 'B', 'C', 'D', 'A',
+    'E', 'B', 'C', 'A', 'D', 'B', 'E', 'A', 'C', 'D',
+    'A', 'B', 'E', 'C', 'D', 'B', 'A', 'D', 'C', 'E',
+    'A', 'C', 'B', 'D', 'E', 'C', 'A', 'B', 'D', 'E',
+    'B', 'D', 'A', 'C', 'E', 'A', 'D', 'B', 'E', 'C',
+]
 
 def make_key_text(n):
     lines = []
-    for i in range(1, n+1):
-        ans = DEFAULT_50[i-1] if i <= 50 else 'A'
+    for i in range(1, n + 1):
+        ans = DEFAULT_50[i - 1] if i <= 50 else 'A'
         lines.append(f"{i}. {ans}")
     return "\n".join(lines)
 
@@ -376,29 +392,32 @@ with st.sidebar:
     st.divider()
 
     steps = [
-        ('setup',        '⚙', 'Setup'),
-        ('scan',         '📸', 'Scan'),
-        ('handwriting',  '✍️', 'OCR'),
-        ('results',      '📊', 'Hasil'),
+        ('setup',       '⚙',  'Setup'),
+        ('scan',        '📸', 'Scan'),
+        ('handwriting', '✍️', 'OCR'),
+        ('results',     '📊', 'Hasil'),
     ]
     cur = st.session_state.step
     cur_idx = [s[0] for s in steps].index(cur) if cur in [s[0] for s in steps] else 0
 
     for i, (s, icon, lbl) in enumerate(steps):
         if i < cur_idx:
-            cls = "done"; dot = "✓"
+            cls = "done"
+            dot = "✓"
         elif i == cur_idx:
-            cls = "active"; dot = icon
+            cls = "active"
+            dot = icon
         else:
-            cls = ""; dot = icon
+            cls = ""
+            dot = icon
         st.markdown(
             f'<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;'
             f'border-radius:8px;margin-bottom:4px;'
-            f'background:{"rgba(74,86,148,0.2)" if cls=="active" else "rgba(61,139,110,0.1)" if cls=="done" else "transparent"};'
-            f'border:1px solid {"rgba(74,86,148,0.4)" if cls=="active" else "rgba(61,139,110,0.25)" if cls=="done" else "transparent"}">'
+            f'background:{"rgba(74,86,148,0.2)" if cls == "active" else "rgba(61,139,110,0.1)" if cls == "done" else "transparent"};'
+            f'border:1px solid {"rgba(74,86,148,0.4)" if cls == "active" else "rgba(61,139,110,0.25)" if cls == "done" else "transparent"}">'
             f'<span style="font-size:1rem">{dot}</span>'
-            f'<span style="font-size:0.92rem;color:{"#EAE0CF" if cls in ["active","done"] else "#4B5694"};'
-            f'font-weight:{"600" if cls=="active" else "400"}">{lbl}</span>'
+            f'<span style="font-size:0.92rem;color:{"#EAE0CF" if cls in ["active", "done"] else "#4B5694"};'
+            f'font-weight:{"600" if cls == "active" else "400"}">{lbl}</span>'
             f'</div>',
             unsafe_allow_html=True
         )
@@ -408,7 +427,7 @@ with st.sidebar:
     records = st.session_state.records
     if records:
         scores = [r.get('score', 0) for r in records if r.get('processed')]
-        st.markdown(f'<div class="section-label">Sesi Aktif</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">Sesi Aktif</div>', unsafe_allow_html=True)
         st.markdown(f"""
         <div class="card-sm" style="margin-bottom:8px">
           <div style="font-size:0.78rem;color:#7288AE;margin-bottom:8px">
@@ -428,14 +447,21 @@ with st.sidebar:
         </div>
         """, unsafe_allow_html=True)
 
-        grade_counts = {'A':0,'B':0,'C':0,'D':0,'E':0}
+        grade_counts = {'A': 0, 'B': 0, 'C': 0, 'D': 0, 'E': 0}
         for s in scores:
             g = grade_from_score(s)
             if g in grade_counts:
-                grade_counts[g]+=1
-        grade_colors = {'A':'#6DBF9E','B':'#7CA4D4','C':'#D4A96A','D':'#E07575','E':'#9B7E7E'}
+                grade_counts[g] += 1
+        grade_colors = {
+            'A': '#6DBF9E',
+            'B': '#7CA4D4',
+            'C': '#D4A96A',
+            'D': '#E07575',
+            'E': '#9B7E7E',
+        }
         for g, cnt in grade_counts.items():
-            if cnt == 0: continue
+            if cnt == 0:
+                continue
             pct = cnt / len(records) * 100
             st.markdown(f"""
             <div class="prog-bar-wrap">
@@ -446,11 +472,14 @@ with st.sidebar:
             </div>
             """, unsafe_allow_html=True)
     else:
-        st.markdown(f'<div style="color:#4B5694;font-size:0.88rem;padding:8px 0;font-style:italic">Belum ada data scan</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div style="color:#4B5694;font-size:0.88rem;padding:8px 0;font-style:italic">Belum ada data scan</div>',
+            unsafe_allow_html=True
+        )
 
     st.divider()
     if st.button("↺  Reset Sesi"):
-        for k in ['answer_key','records','step','sesi_nama','kode_kelas','kode_dosen','key_text','bundle']:
+        for k in ['answer_key', 'records', 'step', 'sesi_nama', 'kode_kelas', 'kode_dosen', 'key_text', 'bundle']:
             if k in st.session_state:
                 del st.session_state[k]
         st.rerun()
@@ -459,20 +488,27 @@ with st.sidebar:
 step_html = '<div class="step-nav">'
 for i, (s, icon, lbl) in enumerate(steps):
     if i < cur_idx:
-        cls = "done"; badge_icon = "✓"
+        cls = "done"
+        badge_icon = "✓"
     elif i == cur_idx:
-        cls = "active"; badge_icon = icon
+        cls = "active"
+        badge_icon = icon
     else:
-        cls = ""; badge_icon = icon
+        cls = ""
+        badge_icon = icon
     step_html += f'<div class="step-item {cls}"><span class="step-icon">{badge_icon}</span>{lbl}</div>'
 step_html += '</div>'
 st.markdown(step_html, unsafe_allow_html=True)
 
 
+# ─── STEP: SETUP ───────────────────────────────────────────
 if st.session_state.step == 'setup':
     st.markdown('<div class="section-label">Langkah 01</div>', unsafe_allow_html=True)
     st.markdown('<div class="serif-title">Setup <span>Sesi Ujian</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="page-subtitle">Konfigurasikan parameter ujian dan input kunci jawaban sebelum memulai scan.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="page-subtitle">Konfigurasikan parameter ujian dan input kunci jawaban sebelum memulai scan.</div>',
+        unsafe_allow_html=True
+    )
     st.markdown("<br>", unsafe_allow_html=True)
 
     col1, col2 = st.columns([1, 1], gap="large")
@@ -491,7 +527,7 @@ if st.session_state.step == 'setup':
           </div>
         ''', unsafe_allow_html=True)
 
-        st.session_state.sesi_nama = st.text_input("Nama Sesi / Mata Kuliah", value=st.session_state.sesi_nama or "Computer Vision UAS")
+        st.session_state.sesi_nama  = st.text_input("Nama Sesi / Mata Kuliah", value=st.session_state.sesi_nama or "Computer Vision UAS")
         c1, c2 = st.columns(2)
         with c1:
             st.session_state.kode_kelas = st.text_input("Kode Kelas", value=st.session_state.kode_kelas or "LK01")
@@ -528,35 +564,42 @@ if st.session_state.step == 'setup':
         )
         st.session_state.key_text = key_text
 
-        answer_key = {}; errors = []
+        answer_key = {}
+        errors = []
         for line in key_text.strip().split('\n'):
             line = line.strip()
-            if not line: continue
+            if not line:
+                continue
             if '. ' in line:
                 parts = line.split('. ', 1)
             else:
                 parts = line.split(',', 1)
-            if len(parts) != 2: errors.append(f"Format salah: `{line}`"); continue
+            if len(parts) != 2:
+                errors.append(f"Format salah: `{line}`")
+                continue
             try:
-                q = int(parts[0].strip()); ans = parts[1].strip().upper()
-                if ans not in ['A','B','C','D','E']:
-                    errors.append(f"Jawaban tidak valid di soal {q}: `{ans}`"); continue
+                q   = int(parts[0].strip())
+                ans = parts[1].strip().upper()
+                if ans not in ['A', 'B', 'C', 'D', 'E']:
+                    errors.append(f"Jawaban tidak valid di soal {q}: `{ans}`")
+                    continue
                 answer_key[q] = ans
             except ValueError:
                 errors.append(f"Nomor tidak valid: `{line}`")
 
         if errors:
-            for e in errors[:2]: st.error(e)
+            for e in errors[:2]:
+                st.error(e)
         else:
-            total = st.session_state.total_soal
+            total  = st.session_state.total_soal
             filled = len(answer_key)
-            pct = filled / total * 100 if total > 0 else 0
-            color = "#6DBF9E" if filled == total else "#D4A96A"
+            pct    = filled / total * 100 if total > 0 else 0
+            color  = "#6DBF9E" if filled == total else "#D4A96A"
             st.markdown(f"""
             <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;
               background:rgba(61,139,110,0.08);border:1px solid rgba(61,139,110,0.25);
               border-radius:10px;margin-top:8px">
-              <span style="font-size:1.1rem">{'✅' if filled==total else '⚠️'}</span>
+              <span style="font-size:1.1rem">{'✅' if filled == total else '⚠️'}</span>
               <div>
                 <div style="font-size:0.85rem;color:{color};font-weight:600">
                   {filled} / {total} kunci jawaban valid
@@ -568,26 +611,43 @@ if st.session_state.step == 'setup':
 
         st.markdown('</div>', unsafe_allow_html=True)
 
+    st.session_state.answer_key = answer_key
+
     st.markdown("<br>", unsafe_allow_html=True)
     col_btn, _ = st.columns([1, 3])
     with col_btn:
-        if st.session_state.step == 'scan':
-            st.markdown('<div class="section-label">Langkah 02</div>', unsafe_allow_html=True)
-            st.markdown('<div class="serif-title">Scan <span>Lembar Jawaban</span></div>', unsafe_allow_html=True)
-            st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {st.session_state.kode_kelas} &nbsp;·&nbsp; {st.session_state.total_soal} soal &nbsp;·&nbsp; {len(st.session_state.records)} lembar ter-scan</div>', unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            c1, c2, c3 = st.columns([1, 1, 5])
-            with c1:
-                if st.button("← Setup", width='stretch'):
-                    st.session_state.step = 'setup'
-                    st.rerun()
-            with c2:
-                if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, width='stretch'):
-                    st.session_state.step = 'handwriting'
-                    st.rerun()
-        
-            st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("Mulai Scan →", use_container_width=True):
+            if not answer_key:
+                st.error("Kunci jawaban belum diisi.")
+            else:
+                st.session_state.step = 'scan'
+                st.rerun()
+
+# ─── STEP: SCAN ────────────────────────────────────────────
+elif st.session_state.step == 'scan':
+    st.markdown('<div class="section-label">Langkah 02</div>', unsafe_allow_html=True)
+    st.markdown('<div class="serif-title">Scan <span>Lembar Jawaban</span></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="page-subtitle">'
+        f'{st.session_state.sesi_nama} &nbsp;·&nbsp; '
+        f'{st.session_state.kode_kelas} &nbsp;·&nbsp; '
+        f'{st.session_state.total_soal} soal &nbsp;·&nbsp; '
+        f'{len(st.session_state.records)} lembar ter-scan</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns([1, 1, 5])
+    with c1:
+        if st.button("← Setup", use_container_width=True):
+            st.session_state.step = 'setup'
+            st.rerun()
+    with c2:
+        if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, use_container_width=True):
+            st.session_state.step = 'handwriting'
+            st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown("""
     <div style="margin-bottom:0.6rem">
@@ -637,16 +697,14 @@ if st.session_state.step == 'setup':
                 img_pil = Image.open(uploaded)
                 img_bgr = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
-                # Corner detection
                 with st.spinner("Mendeteksi 4 sudut LJK..."):
                     selected = find_corner_bubbles(img_bgr, visualize=False)
-                    warped = warp_perspective(img_bgr, selected)
+                    warped   = warp_perspective(img_bgr, selected)
 
                 col_orig, col_warp = st.columns(2, gap="medium")
                 with col_orig:
                     st.markdown('<div class="section-label">Input Asli</div>', unsafe_allow_html=True)
-                    st.image(img_pil, width='stretch')
-                    st.image(cv2.cvtColor(warped, cv2.COLOR_BGR2RGB), width='stretch')
+                    st.image(img_pil, use_container_width=True)
                 with col_warp:
                     st.markdown('<div class="section-label">Setelah Warp Perspective</div>', unsafe_allow_html=True)
                     if warped is not None and warped.shape[0] > 0:
@@ -655,40 +713,46 @@ if st.session_state.step == 'setup':
                         st.error("❌ Gagal mendeteksi 4 sudut LJK. Coba ulang dengan foto yang lebih jelas.")
                         continue
 
-                # Save record
                 record = {
-                    'filename': fname,
-                    'img_bgr': warped,
+                    'filename':   fname,
+                    'img_bgr':    warped,
                     'answer_key': st.session_state.answer_key,
                     'total_soal': st.session_state.total_soal,
-                    'processed': False
+                    'processed':  False,
                 }
                 st.session_state.records.append(record)
                 st.success(f"✅ `{fname}` berhasil diproses.")
 
+# ─── STEP: OCR ─────────────────────────────────────────────
 elif st.session_state.step == 'handwriting':
     st.markdown('<div class="section-label">Langkah 03</div>', unsafe_allow_html=True)
     st.markdown('<div class="serif-title">OCR <span>Tulisan Tangan & OMR</span></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {len(st.session_state.records)} lembar</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {len(st.session_state.records)} lembar</div>',
+        unsafe_allow_html=True
+    )
     st.markdown("<br>", unsafe_allow_html=True)
 
     records = st.session_state.records
     if not records:
         st.warning("Belum ada data scan.")
-        if st.button("← Scan"): st.session_state.step = 'scan'; st.rerun()
+        if st.button("← Scan"):
+            st.session_state.step = 'scan'
+            st.rerun()
         st.stop()
 
     c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
         if st.button("← Scan", use_container_width=True):
-            st.session_state.step = 'scan'; st.rerun()
+            st.session_state.step = 'scan'
+            st.rerun()
     with c2:
         if st.button("Lihat Hasil →", use_container_width=True):
-            st.session_state.step = 'results'; st.rerun()
+            st.session_state.step = 'results'
+            st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Load model once
     if st.session_state.bundle is None:
         with st.spinner("Loading SVM model..."):
             st.session_state.bundle = load_or_train()
@@ -698,87 +762,78 @@ elif st.session_state.step == 'handwriting':
         st.error("❌ Gagal load model SVM. Pastikan `svm_emnist.pkl` ada di folder.")
         st.stop()
 
-    # Process each record
     for idx, record in enumerate(records):
         warped = record['img_bgr']
-        fname = record['filename']
+        fname  = record['filename']
 
         with st.expander(f"📝 {fname}", expanded=(not record.get('processed', False))):
             if not record.get('processed', False):
                 with st.spinner(f"Memproses data & OMR untuk {fname}..."):
-                    # Detect NAMA & Heatmap Nama dari scanner.py
-                    nama_text, density_nama = detect_nama(warped)
-                    
-                    # Detect NIM & Heatmap NIM dari scanner.py
-                    nim_text, density_nim = detect_nim(warped)
-                    
-                    # Detect TANGGAL & Heatmap Tanggal dari scanner.py
-                    tgl_text, density_tanggal = detect_tanggal(warped)
+                    nama_text,    density_nama     = detect_nama(warped)
+                    nim_text,     density_nim      = detect_nim(warped)
+                    tgl_text,     density_tanggal  = detect_tanggal(warped)
 
-                    # Detect KODE_KELAS (Tetap via OCR digital)
                     x1, y1, x2, y2 = ALL_ROIS['KODE_KELAS']
-                    roi_kode = warped[y1:y2, x1:x2]
+                    roi_kode        = warped[y1:y2, x1:x2]
                     kode_text, _, _ = predict_text(roi_kode, bundle, label='KODE_KELAS')
-                    kode_text = postprocess('KODE_KELAS', kode_text)
+                    kode_text       = postprocess('KODE_KELAS', kode_text)
 
-                    # Detect answers & Heatmap Jawaban dari scanner.py
                     answers, density_jawaban = detect_answers(warped, st.session_state.total_soal)
                     benar, salah, kosong, score = calculate_score(
                         answers,
                         st.session_state.answer_key
                     )
 
-                    # Save data internal ke record
-                    record['nama'] = nama_text
-                    record['nim'] = nim_text
-                    record['tanggal'] = tgl_text
-                    record['kode_kelas'] = kode_text
-                    record['answers'] = answers
-                    record['score'] = score
-                    record['benar'] = benar
-                    record['salah'] = salah
-                    record['kosong'] = kosong
-                    record['density_nama'] = density_nama
-                    record['density_nim'] = density_nim
-                    record['density_tanggal'] = density_tanggal
-                    record['density_jawaban'] = density_jawaban
-                    record['processed'] = True
+                    record.update({
+                        'nama':             nama_text,
+                        'nim':              nim_text,
+                        'tanggal':          tgl_text,
+                        'kode_kelas':       kode_text,
+                        'answers':          answers,
+                        'score':            score,
+                        'benar':            benar,
+                        'salah':            salah,
+                        'kosong':           kosong,
+                        'density_nama':     density_nama,
+                        'density_nim':      density_nim,
+                        'density_tanggal':  density_tanggal,
+                        'density_jawaban':  density_jawaban,
+                        'processed':        True,
+                    })
             else:
-                # Muat dari memori jika sudah diproses sebelumnya
-                nama_text = record['nama']
-                nim_text = record['nim']
-                tgl_text = record['tanggal']
-                kode_text = record['kode_kelas']
-                answers = record['answers']
-                benar = record['benar']
-                salah = record['salah']
-                kosong = record['kosong']
-                score = record['score']
-                
-                # AMANKAN SEMUA DENSITY MENGGUNAKAN .get() AGAR TIDAK KEYERROR
-                density_nama = record.get('density_nama', np.zeros((26, 20)))
-                density_nim = record.get('density_nim', np.zeros((10, 10)))
-                density_tanggal = record.get('density_tanggal', np.zeros((10, 6)))
-                density_jawaban = record.get('density_jawaban', np.zeros((st.session_state.total_soal, 5)))
+                nama_text  = record['nama']
+                nim_text   = record['nim']
+                tgl_text   = record['tanggal']
+                kode_text  = record['kode_kelas']
+                answers    = record['answers']
+                benar      = record['benar']
+                salah      = record['salah']
+                kosong     = record['kosong']
+                score      = record['score']
 
-            # Display identity
+                density_nama     = record.get('density_nama',    np.zeros((26, 20)))
+                density_nim      = record.get('density_nim',     np.zeros((10, 10)))
+                density_tanggal  = record.get('density_tanggal', np.zeros((10, 6)))
+                density_jawaban  = record.get('density_jawaban', np.zeros((st.session_state.total_soal, 5)))
+
+            # Identity card
             st.markdown(f"""
             <div class="card-sm" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap">
               <div>
                 <div class="section-label">Nama (OMR)</div>
-                <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#EAE0CF">{nama_text if nama_text else "—"}</div>
+                <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#EAE0CF">{nama_text or "—"}</div>
               </div>
               <div>
                 <div class="section-label">NIM (OMR)</div>
-                <div style="font-family:'JetBrains Mono',monospace;font-size:1rem;color:#7CA4D4">{nim_text if nim_text else "—"}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:1rem;color:#7CA4D4">{nim_text or "—"}</div>
               </div>
               <div>
                 <div class="section-label">Tanggal (OMR)</div>
-                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#EAE0CF">{tgl_text if tgl_text else "—"}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#EAE0CF">{tgl_text or "—"}</div>
               </div>
               <div>
                 <div class="section-label">Kode Kelas</div>
-                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#7CA4D4">{kode_text if kode_text else "—"}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#7CA4D4">{kode_text or "—"}</div>
               </div>
             </div>
             """, unsafe_allow_html=True)
@@ -809,34 +864,37 @@ elif st.session_state.step == 'handwriting':
 
             # Answer grid
             st.markdown('<div class="section-label" style="margin-top:1.2rem">Detail Jawaban</div>', unsafe_allow_html=True)
-            key = st.session_state.answer_key
+            key       = st.session_state.answer_key
             grid_html = '<div class="answer-grid">'
             for q in range(1, st.session_state.total_soal + 1):
                 s_ans = answers.get(q)
                 k_ans = key.get(q, '?')
                 if s_ans is None:
-                    cls = "empty"; txt = f"{q}. —"
+                    cls = "empty"
+                    txt = f"{q}. —"
                 elif s_ans == k_ans:
-                    cls = "correct"; txt = f"{q}. {s_ans}"
+                    cls = "correct"
+                    txt = f"{q}. {s_ans}"
                 else:
-                    cls = "wrong"; txt = f"{q}. {s_ans}"
+                    cls = "wrong"
+                    txt = f"{q}. {s_ans}"
                 grid_html += f'<div class="ans-cell {cls}">{txt}</div>'
             grid_html += '</div>'
             st.markdown(grid_html, unsafe_allow_html=True)
 
             st.markdown("<br>", unsafe_allow_html=True)
 
-            # Visualisasi Heatmap per dokumen menggunakan st.tabs
+            # Heatmap tabs
             st.markdown('<div class="section-label">🔥 Analisis Heatmap Kepadatan Piksel</div>', unsafe_allow_html=True)
             h_tab1, h_tab2, h_tab3, h_tab4 = st.tabs(["Nama", "NIM", "Tanggal", "Jawaban OMR"])
-            
+
             with h_tab1:
                 ALPHABET = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
                 show_heatmap(
                     density_map=density_nama,
                     title=f"Heatmap Nama OMR ({nama_text})",
                     y_labels=ALPHABET,
-                    x_labels=[f"{i+1}" for i in range(20)],
+                    x_labels=[f"{i + 1}" for i in range(20)],
                     cmap='RdYlGn'
                 )
             with h_tab2:
@@ -844,7 +902,7 @@ elif st.session_state.step == 'handwriting':
                     density_map=density_nim,
                     title=f"Heatmap NIM OMR ({nim_text})",
                     y_labels=[str(i) for i in range(10)],
-                    x_labels=[f"{i+1}" for i in range(10)],
+                    x_labels=[f"{i + 1}" for i in range(10)],
                     cmap='RdYlGn'
                 )
             with h_tab3:
@@ -852,54 +910,57 @@ elif st.session_state.step == 'handwriting':
                     density_map=density_tanggal,
                     title=f"Heatmap Tanggal OMR ({tgl_text})",
                     y_labels=[str(i) for i in range(10)],
-                    x_labels=[f"{i+1}" for i in range(6)],
+                    x_labels=[f"{i + 1}" for i in range(6)],
                     cmap='RdYlGn'
                 )
             with h_tab4:
                 show_heatmap(
                     density_map=density_jawaban,
                     title="Heatmap Lembar Jawaban (1-50)",
-                    y_labels=[f"Soal {i+1}" for i in range(len(density_jawaban))],
+                    y_labels=[f"Soal {i + 1}" for i in range(len(density_jawaban))],
                     x_labels=['A', 'B', 'C', 'D', 'E'],
                     cmap='jet'
                 )
 
+# ─── STEP: RESULTS ─────────────────────────────────────────
 elif st.session_state.step == 'results':
     st.markdown('<div class="section-label">Langkah 04</div>', unsafe_allow_html=True)
     st.markdown('<div class="serif-title">Ringkasan <span>Hasil Akhir</span></div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
-    
+
     records = st.session_state.records
-    
+
     if not records or not all(r.get('processed', False) for r in records):
         st.warning("Belum semua data diproses OCR.")
-        if st.button("← OCR"): st.session_state.step = 'handwriting'; st.rerun()
+        if st.button("← OCR"):
+            st.session_state.step = 'handwriting'
+            st.rerun()
         st.stop()
 
-    if st.button("← Kembali ke OCR", use_container_width=False):
-        st.session_state.step = 'handwriting'; st.rerun()
+    if st.button("← Kembali ke OCR"):
+        st.session_state.step = 'handwriting'
+        st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Transformasi records data ke pandas DataFrame untuk visualisasi ringkasan tabel
     summary_data = []
     for r in records:
         summary_data.append({
-            'File': r['filename'],
-            'Nama': r['nama'],
-            'NIM': r['nim'],
+            'File':    r['filename'],
+            'Nama':    r['nama'],
+            'NIM':     r['nim'],
             'Tanggal': r['tanggal'],
-            'Kelas': r['kode_kelas'],
-            'Benar': r['benar'],
-            'Salah': r['salah'],
-            'Kosong': r['kosong'],
-            'Score': round(r['score'], 2),
-            'Grade': grade_from_score(r['score'])
+            'Kelas':   r['kode_kelas'],
+            'Benar':   r['benar'],
+            'Salah':   r['salah'],
+            'Kosong':  r['kosong'],
+            'Score':   round(r['score'], 2),
+            'Grade':   grade_from_score(r['score']),
         })
-        
+
     df = pd.DataFrame(summary_data)
-    st.dataframe(df, width='stretch', hide_index=True)
-    # Menyediakan file CSV untuk di-download
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="📥 Download Hasil Rekapan (CSV)",
