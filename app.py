@@ -636,7 +636,6 @@ elif st.session_state.step == 'scan':
         unsafe_allow_html=True
     )
     st.markdown("<br>", unsafe_allow_html=True)
-
     c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
         if st.button("← Setup", width='stretch'):
