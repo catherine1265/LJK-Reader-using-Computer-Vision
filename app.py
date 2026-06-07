@@ -571,17 +571,11 @@ if st.session_state.step == 'setup':
     st.markdown("<br>", unsafe_allow_html=True)
     col_btn, _ = st.columns([1, 3])
     with col_btn:
-        if st.button("Mulai Scan  →", disabled=len(answer_key) == 0, width='stretch'):
-            if st.button("← Setup", width='stretch'):
-                if st.button("Lihat OCR →", disabled=..., width='stretch'):
-                    if st.button("← Kembali ke OCR", width='content'):
-
-
-elif st.session_state.step == 'scan':
-    st.markdown('<div class="section-label">Langkah 02</div>', unsafe_allow_html=True)
-    st.markdown('<div class="serif-title">Scan <span>Lembar Jawaban</span></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {st.session_state.kode_kelas} &nbsp;·&nbsp; {st.session_state.total_soal} soal &nbsp;·&nbsp; {len(st.session_state.records)} lembar ter-scan</div>', unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
+        if st.session_state.step == 'scan':
+            st.markdown('<div class="section-label">Langkah 02</div>', unsafe_allow_html=True)
+            st.markdown('<div class="serif-title">Scan <span>Lembar Jawaban</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {st.session_state.kode_kelas} &nbsp;·&nbsp; {st.session_state.total_soal} soal &nbsp;·&nbsp; {len(st.session_state.records)} lembar ter-scan</div>', unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
 
     c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
