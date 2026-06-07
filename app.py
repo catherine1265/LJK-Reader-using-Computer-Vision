@@ -15,7 +15,7 @@ from corner_detection import find_corner_bubbles, warp_perspective
 from scanner import detect_answers, detect_nama, detect_nim, detect_tanggal
 from handwriting_ocr import load_or_train, predict_text, postprocess
 from eda import grade_from_score, calculate_score
-from utils import show_heatmap, show_heatmap_jawaban
+from utils import show_heatmap, show_heatmap_jawaban, show_handwriting
 
 # ─── PAGE CONFIG ────────────────────────────────────────────
 st.set_page_config(
@@ -616,7 +616,7 @@ if st.session_state.step == 'setup':
     st.markdown("<br>", unsafe_allow_html=True)
     col_btn, _ = st.columns([1, 3])
     with col_btn:
-        if st.button("Mulai Scan →", use_container_width=True):
+        if st.button("Mulai Scan  →", disabled=len(answer_key) == 0, width='stretch'):
             if not answer_key:
                 st.error("Kunci jawaban belum diisi.")
             else:
@@ -743,11 +743,11 @@ elif st.session_state.step == 'handwriting':
 
     c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
-        if st.button("← Scan", use_container_width=True):
+        if st.button("← Scan", width='stretch'):
             st.session_state.step = 'scan'
             st.rerun()
     with c2:
-        if st.button("Lihat Hasil →", use_container_width=True):
+        if st.button("Lihat Hasil →", width='stretch'):
             st.session_state.step = 'results'
             st.rerun()
 
@@ -773,10 +773,25 @@ elif st.session_state.step == 'handwriting':
                     nim_text,     density_nim      = detect_nim(warped)
                     tgl_text,     density_tanggal  = detect_tanggal(warped)
 
+                    x1, y1, x2, y2 = ALL_ROIS['NAMA_MATA_KULIAH']
+                    roi_matkul = warped[y1:y2, x1:x2]
+                    matkul_text, _, _ = predict_text(roi_matkul, bundle, label='NAMA_MATA_KULIAH')
+                    matkul_text = postprocess('NAMA_MATA_KULIAH', matkul_text)
+                    
                     x1, y1, x2, y2 = ALL_ROIS['KODE_KELAS']
-                    roi_kode        = warped[y1:y2, x1:x2]
+                    roi_kode = warped[y1:y2, x1:x2]
                     kode_text, _, _ = predict_text(roi_kode, bundle, label='KODE_KELAS')
-                    kode_text       = postprocess('KODE_KELAS', kode_text)
+                    kode_text = postprocess('KODE_KELAS', kode_text)
+                    
+                    x1, y1, x2, y2 = ALL_ROIS['RUANGAN']
+                    roi_ruangan = warped[y1:y2, x1:x2]
+                    ruangan_text, _, _ = predict_text(roi_ruangan, bundle, label='RUANGAN')
+                    ruangan_text = postprocess('RUANGAN', ruangan_text)
+                    
+                    x1, y1, x2, y2 = ALL_ROIS['NO_MEJA']
+                    roi_nomeja = warped[y1:y2, x1:x2]
+                    nomeja_text, _, _ = predict_text(roi_nomeja, bundle, label='NO_MEJA')
+                    nomeja_text = postprocess('NO_MEJA', nomeja_text)
 
                     answers, density_jawaban = detect_answers(warped, st.session_state.total_soal)
                     benar, salah, kosong, score = calculate_score(
@@ -799,23 +814,27 @@ elif st.session_state.step == 'handwriting':
                         'density_tanggal':  density_tanggal,
                         'density_jawaban':  density_jawaban,
                         'processed':        True,
+                        'matkul':           matkul_text,
+                        'ruangan':          ruangan_text,
+                        'no_meja':          nomeja_text,
                     })
             else:
                 nama_text  = record['nama']
                 nim_text   = record['nim']
                 tgl_text   = record['tanggal']
                 kode_text  = record['kode_kelas']
+                matkul_text = record.get('matkul', '')
+                ruangan_text = record.get('ruangan', '')
+                nomeja_text = record.get('no_meja', '')
                 answers    = record['answers']
                 benar      = record['benar']
                 salah      = record['salah']
                 kosong     = record['kosong']
                 score      = record['score']
-
                 density_nama     = record.get('density_nama',    np.zeros((26, 20)))
                 density_nim      = record.get('density_nim',     np.zeros((10, 10)))
                 density_tanggal  = record.get('density_tanggal', np.zeros((10, 6)))
                 density_jawaban  = record.get('density_jawaban', np.zeros((st.session_state.total_soal, 5)))
-
             # Identity card
             st.markdown(f"""
             <div class="card-sm" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap">
@@ -837,7 +856,44 @@ elif st.session_state.step == 'handwriting':
               </div>
             </div>
             """, unsafe_allow_html=True)
-
+            
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        # Handwriting Recognition section
+        st.markdown('<div class="section-label">Tulisan Tangan (Handwriting OCR)</div>', unsafe_allow_html=True)
+        from utils import show_handwriting
+        
+        hw_col1, hw_col2 = st.columns(2)
+        with hw_col1:
+            show_handwriting(
+                roi_img=warped[ALL_ROIS['NAMA_MATA_KULIAH'][1]:ALL_ROIS['NAMA_MATA_KULIAH'][3],
+                               ALL_ROIS['NAMA_MATA_KULIAH'][0]:ALL_ROIS['NAMA_MATA_KULIAH'][2]],
+                ocr_text=matkul_text,
+                label_name="Nama Mata Kuliah"
+            )
+        with hw_col2:
+            show_handwriting(
+                roi_img=warped[ALL_ROIS['KODE_KELAS'][1]:ALL_ROIS['KODE_KELAS'][3],
+                               ALL_ROIS['KODE_KELAS'][0]:ALL_ROIS['KODE_KELAS'][2]],
+                ocr_text=kode_text,
+                label_name="Kode Kelas"
+            )
+        
+        hw_col3, hw_col4 = st.columns(2)
+        with hw_col3:
+            show_handwriting(
+                roi_img=warped[ALL_ROIS['RUANGAN'][1]:ALL_ROIS['RUANGAN'][3],
+                               ALL_ROIS['RUANGAN'][0]:ALL_ROIS['RUANGAN'][2]],
+                ocr_text=ruangan_text,
+                label_name="Ruangan"
+            )
+        with hw_col4:
+            show_handwriting(
+                roi_img=warped[ALL_ROIS['NO_MEJA'][1]:ALL_ROIS['NO_MEJA'][3],
+                               ALL_ROIS['NO_MEJA'][0]:ALL_ROIS['NO_MEJA'][2]],
+                ocr_text=nomeja_text,
+                label_name="No. Meja"
+            )
             st.markdown("<br>", unsafe_allow_html=True)
 
             # Score summary
@@ -967,7 +1023,7 @@ elif st.session_state.step == 'results':
         })
 
     df = pd.DataFrame(summary_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)
 
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(
