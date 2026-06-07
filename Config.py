@@ -14,6 +14,9 @@ ALL_CHARS = sorted(
 )
 
 ALL_ROIS = {
+    'NAMA': (40, 270, 520, 850),
+    'NIM': (550, 270, 790, 500),
+    'TANGGAL': (820, 270, 970, 500),
     'NAMA_MATA_KULIAH': (50, 180, 900, 240),
     'KODE_KELAS': (50, 270, 300, 330),
     'RUANGAN': (50, 360, 300, 420),
