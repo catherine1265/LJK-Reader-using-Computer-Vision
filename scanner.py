@@ -3,7 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from config import ALL_ROIS, KUNCI_JAWABAN
 
-
 CHOICES = ['A', 'B', 'C', 'D', 'E']
 JENIS_UJIAN_LABELS = [
     'UJIAN TENGAH SEMESTER',
@@ -111,6 +110,8 @@ def detect_nama(warped):
     col_w = roi_w / NUM_COLS
     
     raw_scores = np.zeros((26, NUM_COLS), dtype=float)
+    density_map = np.zeros((26, NUM_COLS), dtype=float)
+    
     for col in range(NUM_COLS):
         x0 = int(col * col_w) + 2
         x1 = int((col + 1) * col_w) - 2
@@ -134,6 +135,8 @@ def detect_nama(warped):
         std = arr.std() + 1e-6
         z = (arr - mean) / std
         
+        density_map[:, col] = z
+        
         best_row = int(np.argmax(z))
         best_z = z[best_row]
         second_z = sorted(z)[-2]
@@ -145,28 +148,40 @@ def detect_nama(warped):
             nama_result.append('_')
     
     nama_str = ''.join(nama_result).replace('_', ' ').strip()
-    return nama_str
+    
+    # MODIFIKASI: Mengembalikan string nama DAN matriks density_map
+    return nama_str, density_map
 
 
 def detect_nim(warped):
     x1, y1, x2, y2 = ALL_ROIS['NIM']
     roi_nim = cv2.cvtColor(warped[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
-    r_nim, _, _, _, _, _ = scan_grid(
+    
+    # MODIFIKASI: Tangkap output density_map ke variabel d_map
+    r_nim, d_map, _, _, _, _ = scan_grid(
         roi_nim, num_cols=10, num_rows=10,
         labels=[str(i) for i in range(10)], per_row=False)
+        
     nim_final = ''.join(r or '_' for r in r_nim)
-    return nim_final
+    
+    # MODIFIKASI: Mengembalikan string NIM DAN matriks density_map
+    return nim_final, d_map
 
 
 def detect_tanggal(warped):
     x1, y1, x2, y2 = ALL_ROIS['TANGGAL']
     roi_tgl = cv2.cvtColor(warped[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
     tgl_cols = 6
-    r_tgl, _, _, _, _, _ = scan_grid(
+    
+    # MODIFIKASI: Tangkap output density_map ke variabel d_map
+    r_tgl, d_map, _, _, _, _ = scan_grid(
         roi_tgl, num_cols=tgl_cols, num_rows=10,
         labels=[str(i) for i in range(10)], per_row=False)
+        
     tgl_final = ''.join(r or '_' for r in r_tgl)
-    return tgl_final
+    
+    # MODIFIKASI: Mengembalikan string Tanggal DAN matriks density_map
+    return tgl_final, d_map
 
 
 def detect_answers(warped, total_soal=50):
@@ -185,7 +200,7 @@ def detect_answers(warped, total_soal=50):
     
     all_answers = {}
     soal_done = 0
-    heatmap_list = [] # Wadah penampung matriks baris soal
+    heatmap_list = []
     
     for label, x1, y1, x2, y2, q_start in ROI_JAWABAN:
         if soal_done >= total_soal:
@@ -195,12 +210,10 @@ def detect_answers(warped, total_soal=50):
         roi_bgr = warped[y1:y2, x1:x2]
         roi_gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
         
-        # TANGKAP density_map dari scan_grid
         r_blok, d_map, _, _, _, _ = scan_grid(
             roi_gray, num_cols=5, num_rows=10,
             labels=CHOICES, per_row=True)
         
-        # Ambil d_map sesuai jumlah soal aktif lalu masukkan ke list
         heatmap_list.append(d_map[:soal_di_blok])
         
         r_aktif = r_blok[:soal_di_blok]
@@ -210,8 +223,6 @@ def detect_answers(warped, total_soal=50):
         
         soal_done += soal_di_blok
         
-    # Gabungkan semua matriks menjadi satu heatmap besar secara vertikal
     full_heatmap = np.vstack(heatmap_list) if heatmap_list else np.zeros((10, 5))
     
-    # KEMBALIKAN DUA NILAI: Hasil jawaban DAN Matriks Heatmap
     return all_answers, full_heatmap
