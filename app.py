@@ -14,7 +14,7 @@ from config import ALL_ROIS
 from corner_detection import find_corner_bubbles, warp_perspective
 from scanner import detect_answers, detect_nama, detect_nim, detect_tanggal
 from handwriting_ocr import load_or_train, predict_text, postprocess
-from eda import grade_from_score, calculate_score
+from eda import grade_from_score, visualize_eda
 from utils import show_heatmap, show_heatmap_jawaban, show_handwriting
 
 # ─── PAGE CONFIG ────────────────────────────────────────────
@@ -794,10 +794,14 @@ elif st.session_state.step == 'handwriting':
                     nomeja_text = postprocess('NO_MEJA', nomeja_text)
 
                     answers, density_jawaban = detect_answers(warped, st.session_state.total_soal)
-                    benar, salah, kosong, score = calculate_score(
-                        answers,
-                        st.session_state.answer_key
-                    )
+                    
+                    # Hitung score
+                    benar = sum(1 for q, ans in answers.items()
+                               if ans and st.session_state.answer_key.get(q) == ans)
+                    salah = sum(1 for q, ans in answers.items()
+                               if ans and st.session_state.answer_key.get(q) != ans)
+                    kosong = st.session_state.total_soal - benar - salah
+                    score = round(benar / st.session_state.total_soal * 100, 2) if st.session_state.total_soal > 0 else 0
 
                     record.update({
                         'nama':             nama_text,
@@ -1007,6 +1011,19 @@ elif st.session_state.step == 'results':
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # Prepare data untuk EDA
+    semua_hasil = []
+    for r in records:
+        semua_hasil.append({
+            'nim': r['nim'],
+            'nama': r['nama'],
+            'score': r['score'],
+            'benar': r['benar'],
+            'salah': r['salah'],
+            'kosong': r['kosong'],
+            'jawaban': r['answers'],
+        })
+
     summary_data = []
     for r in records:
         summary_data.append({
@@ -1026,9 +1043,23 @@ elif st.session_state.step == 'results':
     st.dataframe(df, width='stretch', hide_index=True)
 
     csv = df.to_csv(index=False).encode('utf-8')
-    st.download_button(
-        label="📥 Download Hasil Rekapan (CSV)",
-        data=csv,
-        file_name=f"Rekap_Nilai_{st.session_state.kode_kelas or 'LJK'}.csv",
-        mime='text/csv',
-    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    # Generate dan tampilkan EDA langsung
+    st.markdown('<div class="section-label">📊 Analisis Statistik Nilai</div>', unsafe_allow_html=True)
+    with st.spinner("Generating EDA visualization..."):
+        fig = visualize_eda(semua_hasil, st.session_state.answer_key)
+        if fig:
+            st.pyplot(fig)
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            label="📥 Download Hasil Rekapan (CSV)",
+            data=csv,
+            file_name=f"Rekap_Nilai_{st.session_state.kode_kelas or 'LJK'}.csv",
+            mime='text/csv',
+        )
