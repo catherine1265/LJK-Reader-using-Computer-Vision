@@ -639,11 +639,11 @@ elif st.session_state.step == 'scan':
 
     c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
-        if st.button("← Setup", use_container_width=True):
+        if st.button("← Setup", width='stretch'):
             st.session_state.step = 'setup'
             st.rerun()
     with c2:
-        if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, use_container_width=True):
+        if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, width='stretch'):
             st.session_state.step = 'handwriting'
             st.rerun()
 
@@ -704,11 +704,11 @@ elif st.session_state.step == 'scan':
                 col_orig, col_warp = st.columns(2, gap="medium")
                 with col_orig:
                     st.markdown('<div class="section-label">Input Asli</div>', unsafe_allow_html=True)
-                    st.image(img_pil, use_container_width=True)
+                    st.image(img_pil, width='stretch')
                 with col_warp:
                     st.markdown('<div class="section-label">Setelah Warp Perspective</div>', unsafe_allow_html=True)
                     if warped is not None and warped.shape[0] > 0:
-                        st.image(cv2.cvtColor(warped, cv2.COLOR_BGR2RGB), use_container_width=True)
+                        st.image(cv2.cvtColor(warped, cv2.COLOR_BGR2RGB), width='stretch')
                     else:
                         st.error("❌ Gagal mendeteksi 4 sudut LJK. Coba ulang dengan foto yang lebih jelas.")
                         continue
@@ -742,14 +742,16 @@ elif st.session_state.step == 'handwriting':
         st.stop()
 
     c1, c2, c3 = st.columns([1, 1, 5])
-    with c1:
-        if st.button("← Scan", width='stretch'):
-            st.session_state.step = 'scan'
-            st.rerun()
-    with c2:
-        if st.button("Lihat Hasil →", width='stretch'):
-            st.session_state.step = 'results'
-            st.rerun()
+        
+        with c1:
+            if st.button("← Setup", width='stretch'):
+                st.session_state.step = 'setup'
+                st.rerun()
+                
+        with c2:
+            if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, width='stretch'):
+                st.session_state.step = 'handwriting'
+                st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
