@@ -1,7 +1,3 @@
-"""
-EDA Module - Scoring, grade conversion, dan statistik analysis functions
-Extracted dari cv_final__w_eda_.py - Keep all original logic intact
-"""
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -33,21 +29,6 @@ def grade_from_score(score):
 
 
 def calculate_score(answers, answer_key):
-    """
-    Calculate score dari dict jawaban siswa
-    Sesuai cv_final__w_eda_.py line 1374-1383
-    
-    Args:
-        answers: dict {soal_number: 'A'/'B'/'C'/'D'/'E' or None}
-        answer_key: dict {soal_number: 'A'/'B'/'C'/'D'/'E'}
-    
-    Returns:
-        tuple: (benar, salah, kosong, score_percentage)
-            - benar: int, jumlah jawaban benar
-            - salah: int, jumlah jawaban salah
-            - kosong: int, jumlah yang tidak dijawab
-            - score_percentage: float, nilai 0-100 (benar / len(answer_key) * 100)
-    """
     if not answer_key:
         return 0, 0, 0, 0
     
@@ -69,15 +50,7 @@ def calculate_score(answers, answer_key):
 
 
 def visualize_eda(df_records, answer_key, output_path='eda_statistik.png'):
-    """
-    Visualisasi EDA dengan 5 charts
-    Sesuai cv_final__w_eda_.py line 1476-1551
-    
-    Args:
-        df_records: list of dicts with keys: 'nama', 'nim', 'score', 'benar', 'salah', 'kosong'
-        answer_key: dict dengan answer key
-        output_path: path untuk save gambar
-    """
+
     if not df_records or not answer_key:
         return
     
