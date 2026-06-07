@@ -12,7 +12,7 @@ import matplotlib.gridspec as gridspec
 # ─── IMPORT MODULES ─────────────────────────────────────────
 from config import ALL_ROIS
 from corner_detection import find_corner_bubbles, warp_perspective
-from bubble_detection import detect_nama, detect_nim, detect_tanggal, detect_answers
+from bubble_detection import extract_answers 
 from handwriting_ocr import load_or_train, predict_text, postprocess
 from eda import grade_from_score, calculate_score
 
@@ -177,7 +177,7 @@ h1, h2, h3 { font-family: 'DM Serif Display', serif !important; color: var(--cre
 }
 .c-blue   { color: #7CA4D4; }
 .c-green  { color: #6DBF9E; }
-.c-red    { color: #E07575; }
+.c-red     { color: #E07575; }
 .c-grey   { color: #7288AE; }
 .c-amber  { color: #D4A96A; }
 .c-cream  { color: var(--cream); }
@@ -467,9 +467,7 @@ for i, (s, icon, lbl) in enumerate(steps):
 step_html += '</div>'
 st.markdown(step_html, unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════════════════════
-#  STEP 1 — SETUP
-# ══════════════════════════════════════════════════════════════
+
 if st.session_state.step == 'setup':
     st.markdown('<div class="section-label">Langkah 01</div>', unsafe_allow_html=True)
     st.markdown('<div class="serif-title">Setup <span>Sesi Ujian</span></div>', unsafe_allow_html=True)
@@ -577,9 +575,7 @@ if st.session_state.step == 'setup':
             st.session_state.step = 'scan'
             st.rerun()
 
-# ══════════════════════════════════════════════════════════════
-#  STEP 2 — SCAN (with corner detection + warp + zscore)
-# ══════════════════════════════════════════════════════════════
+
 elif st.session_state.step == 'scan':
     st.markdown('<div class="section-label">Langkah 02</div>', unsafe_allow_html=True)
     st.markdown('<div class="serif-title">Scan <span>Lembar Jawaban</span></div>', unsafe_allow_html=True)
@@ -671,9 +667,6 @@ elif st.session_state.step == 'scan':
                 st.session_state.records.append(record)
                 st.success(f"✅ `{fname}` berhasil diproses.")
 
-# ══════════════════════════════════════════════════════════════
-#  STEP 3 — HANDWRITING OCR
-# ══════════════════════════════════════════════════════════════
 elif st.session_state.step == 'handwriting':
     st.markdown('<div class="section-label">Langkah 03</div>', unsafe_allow_html=True)
     st.markdown('<div class="serif-title">OCR <span>Tulisan Tangan</span></div>', unsafe_allow_html=True)
@@ -740,8 +733,8 @@ elif st.session_state.step == 'handwriting':
                 kode_text, _, _ = predict_text(roi_kode, bundle, label='KODE_KELAS')
                 kode_text = postprocess('KODE_KELAS', kode_text)
 
-                # Detect answers
-                answers = detect_answers(warped, st.session_state.total_soal)
+                # Detect answers (🟢 Bug fixed from detect_answers -> extract_answers)
+                answers = extract_answers(warped, st.session_state.total_soal)
                 benar, salah, kosong, score = calculate_score(
                     answers,
                     st.session_state.answer_key
@@ -822,223 +815,9 @@ elif st.session_state.step == 'handwriting':
             record['kosong'] = kosong
             record['processed'] = True
 
-# ══════════════════════════════════════════════════════════════
-#  STEP 4 — RESULTS (EDA)
-# ══════════════════════════════════════════════════════════════
 elif st.session_state.step == 'results':
     records = st.session_state.records
     
     if not records or not all('processed' in r for r in records):
         st.warning("Belum semua data diproses OCR.")
         if st.button("← OCR"): st.session_state.step = 'handwriting'; st.rerun()
-        st.stop()
-
-    st.markdown('<div class="section-label">Langkah 04</div>', unsafe_allow_html=True)
-    st.markdown('<div class="serif-title">Hasil & <span>Analitik Kelas</span></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {st.session_state.kode_kelas}</div>', unsafe_allow_html=True)
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    c1, c2 = st.columns([1, 5])
-    with c1:
-        if st.button("← OCR", use_container_width=True):
-            st.session_state.step = 'handwriting'; st.rerun()
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Convert to DataFrame
-    df_data = []
-    for r in records:
-        df_data.append({
-            'Nama': r.get('nama', ''),
-            'NIM': r.get('nim', ''),
-            'Tanggal': r.get('tanggal', ''),
-            'Benar': r.get('benar', 0),
-            'Salah': r.get('salah', 0),
-            'Kosong': r.get('kosong', 0),
-            'Score': r.get('score', 0),
-            'Grade': grade_from_score(r.get('score', 0)),
-            'Jawaban': r.get('answers', {}),
-            'Kunci': r.get('answer_key', {}),
-        })
-
-    df = pd.DataFrame(df_data)
-    scores = df['Score'].tolist()
-
-    # Summary metrics
-    st.markdown(f"""
-    <div class="metrics-row">
-      <div class="metric-tile">
-        <div class="t-val c-cream">{len(records)}</div>
-        <div class="t-lbl">Mahasiswa</div>
-      </div>
-      <div class="metric-tile">
-        <div class="t-val c-blue">{np.mean(scores):.1f}</div>
-        <div class="t-lbl">Rata-rata</div>
-      </div>
-      <div class="metric-tile">
-        <div class="t-val c-green">{max(scores):.1f}</div>
-        <div class="t-lbl">Tertinggi</div>
-      </div>
-      <div class="metric-tile">
-        <div class="t-val c-red">{min(scores):.1f}</div>
-        <div class="t-lbl">Terendah</div>
-      </div>
-      <div class="metric-tile">
-        <div class="t-val c-amber">{np.std(scores):.2f}</div>
-        <div class="t-lbl">Std Dev</div>
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    tab1, tab2, tab3 = st.tabs(["📋  Tabel Nilai", "📈  Grafik & Distribusi", "💾  Export"])
-
-    COLORS = {
-        'navy': '#111844', 'mid': '#4B5694', 'steel': '#7288AE',
-        'cream': '#EAE0CF', 'green': '#6DBF9E', 'red': '#E07575',
-        'blue': '#7CA4D4', 'amber': '#D4A96A',
-    }
-
-    def style_axes(ax):
-        ax.set_facecolor('#0C1235')
-        for sp in ax.spines.values(): sp.set_color(COLORS['mid'])
-        ax.tick_params(colors=COLORS['steel'], labelsize=8)
-        ax.xaxis.label.set_color(COLORS['steel'])
-        ax.yaxis.label.set_color(COLORS['steel'])
-        ax.title.set_color(COLORS['cream'])
-        ax.grid(axis='y', color=COLORS['mid'], alpha=0.2, linewidth=0.5)
-
-    # Tab 1 — Table
-    with tab1:
-        df_tabel = df[['Nama', 'NIM', 'Tanggal', 'Benar', 'Salah', 'Kosong', 'Score', 'Grade']].copy()
-        df_tabel = df_tabel.sort_values('Score', ascending=False).reset_index(drop=True)
-        df_tabel.index = df_tabel.index + 1
-        st.dataframe(df_tabel, use_container_width=True, height=400)
-
-    # Tab 2 — Charts
-    with tab2:
-        col_ch1, col_ch2 = st.columns(2, gap="large")
-        
-        with col_ch1:
-            fig, ax = plt.subplots(figsize=(6, 4), facecolor='#111844')
-            style_axes(ax)
-            n, bins, patches = ax.hist(scores, bins=range(0, 105, 10),
-                                        edgecolor='#111844', linewidth=0.8)
-            for patch in patches:
-                patch.set_facecolor(COLORS['mid'])
-                patch.set_alpha(0.85)
-            ax.axvline(np.mean(scores), color=COLORS['amber'], lw=1.5,
-                       linestyle='--', label=f'Mean = {np.mean(scores):.1f}')
-            ax.set_xlabel("Nilai"); ax.set_ylabel("Jumlah")
-            ax.set_title("Distribusi Nilai", fontsize=11, fontweight='bold', pad=10)
-            ax.legend(facecolor='#0C1235', labelcolor=COLORS['cream'],
-                      fontsize=8, framealpha=0.8)
-            plt.tight_layout(pad=1.5)
-            st.pyplot(fig); plt.close(fig)
-
-        with col_ch2:
-            grade_dist = {'A (≥85)':0,'B (75-84)':0,'C (65-74)':0,'D (55-64)':0,'E (<55)':0}
-            for s in scores:
-                g = grade_from_score(s)
-                if g == 'A': grade_dist['A (≥85)']+=1
-                elif g == 'B': grade_dist['B (75-84)']+=1
-                elif g == 'C': grade_dist['C (65-74)']+=1
-                elif g == 'D': grade_dist['D (55-64)']+=1
-                else: grade_dist['E (<55)']+=1
-            lp = [k for k,v in grade_dist.items() if v>0]
-            sp = [v for v in grade_dist.values() if v>0]
-            pie_colors = [COLORS['green'],COLORS['blue'],COLORS['amber'],COLORS['red'],'#9B7E7E'][:len(lp)]
-            fig2, ax2 = plt.subplots(figsize=(5, 4), facecolor='#111844')
-            ax2.set_facecolor('#111844')
-            wedges, texts, autotexts = ax2.pie(
-                sp, labels=lp, colors=pie_colors,
-                autopct='%1.0f%%', startangle=90,
-                textprops={'color': COLORS['cream'], 'fontsize': 8},
-                wedgeprops={'linewidth': 2, 'edgecolor': '#111844'}
-            )
-            for at in autotexts: at.set_color('#111844'); at.set_fontweight('bold')
-            ax2.set_title("Distribusi Grade", color=COLORS['cream'], fontsize=11,
-                          fontweight='bold', pad=10)
-            plt.tight_layout(pad=1.5)
-            st.pyplot(fig2); plt.close(fig2)
-
-        if len(records) > 1:
-            st.markdown('<div class="section-label" style="margin-top:1rem">Tingkat Kesulitan per Soal</div>', unsafe_allow_html=True)
-            rates = []
-            for q in range(1, st.session_state.total_soal + 1):
-                correct = sum(1 for r in records 
-                            if r['answers'].get(q) == r['answer_key'].get(q))
-                rate = correct / len(records) * 100 if records else 0
-                rates.append(rate)
-            
-            bar_colors = [COLORS['green'] if v>=70 else COLORS['amber'] if v>=40 else COLORS['red'] for v in rates]
-            fig3, ax3 = plt.subplots(figsize=(14, 3), facecolor='#111844')
-            style_axes(ax3)
-            ax3.bar(range(1, st.session_state.total_soal+1), rates, color=bar_colors, width=0.7, edgecolor='none')
-            ax3.set_xlabel("Nomor Soal"); ax3.set_ylabel("% Benar")
-            ax3.set_title("Persentase Benar per Soal", fontsize=11, fontweight='bold', pad=8)
-            ax3.set_ylim(0, 108)
-            ax3.axhline(70, color=COLORS['green'], lw=0.8, linestyle=':', alpha=0.5)
-            ax3.axhline(40, color=COLORS['amber'], lw=0.8, linestyle=':', alpha=0.5)
-            plt.tight_layout(pad=1.5)
-            st.pyplot(fig3); plt.close(fig3)
-
-            st.markdown("""
-            <div style="display:flex;gap:16px;margin-top:4px">
-              <span style="font-size:0.72rem;color:#6DBF9E">■ Mudah (≥70%)</span>
-              <span style="font-size:0.72rem;color:#D4A96A">■ Sedang (40-69%)</span>
-              <span style="font-size:0.72rem;color:#E07575">■ Sulit (&lt;40%)</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Tab 3 — Export
-    with tab3:
-        st.markdown('<div class="section-label">Download Hasil</div>', unsafe_allow_html=True)
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-
-        df_rekap = df[['Nama', 'NIM', 'Tanggal', 'Benar', 'Salah', 'Kosong', 'Score', 'Grade']].copy()
-
-        rows_detail = []
-        for r in records:
-            row = {'NIM': r.get('nim', ''), 'Nama': r.get('nama', ''), 'Score': r.get('score', 0)}
-            for q in range(1, st.session_state.total_soal+1):
-                row[f'Q{q}'] = r['answers'].get(q, '-')
-                row[f'Q{q}_kunci'] = r['answer_key'].get(q, '?')
-            rows_detail.append(row)
-        df_detail = pd.DataFrame(rows_detail)
-
-        df_stats = pd.DataFrame([{'Metrik': m, 'Nilai': v} for m, v in {
-            'Total Mahasiswa': len(records),
-            'Rata-rata': round(np.mean(scores), 2),
-            'Tertinggi': max(scores),
-            'Terendah': min(scores),
-            'Std Deviasi': round(np.std(scores), 2),
-            'Varians': round(np.var(scores), 2),
-        }.items()])
-
-        buf = io.BytesIO()
-        with pd.ExcelWriter(buf, engine='openpyxl') as writer:
-            df_rekap.to_excel(writer, sheet_name='Rekap Nilai', index=False)
-            df_detail.to_excel(writer, sheet_name='Detail Jawaban', index=False)
-            df_stats.to_excel(writer, sheet_name='Statistik Kelas', index=False)
-        buf.seek(0)
-
-        fname = f"hasil_{st.session_state.kode_kelas}_{st.session_state.sesi_nama.replace(' ','_')}.xlsx"
-        st.download_button("⬇  Download Excel (3 Sheet)", data=buf, file_name=fname,
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                           use_container_width=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-        cc1, cc2 = st.columns(2)
-        with cc1:
-            st.download_button("⬇  CSV Rekap Nilai",
-                               df_rekap.to_csv(index=False).encode(),
-                               file_name=f"rekap_{st.session_state.kode_kelas}.csv",
-                               mime="text/csv", use_container_width=True)
-        with cc2:
-            st.download_button("⬇  CSV Detail Jawaban",
-                               df_detail.to_csv(index=False).encode(),
-                               file_name=f"detail_{st.session_state.kode_kelas}.csv",
-                               mime="text/csv", use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
