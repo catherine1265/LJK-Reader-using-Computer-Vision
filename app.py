@@ -825,17 +825,18 @@ elif st.session_state.step == 'handwriting':
                 nim_text   = record['nim']
                 tgl_text   = record['tanggal']
                 kode_text  = record['kode_kelas']
+                matkul_text = record.get('matkul', '')
+                ruangan_text = record.get('ruangan', '')
+                nomeja_text = record.get('no_meja', '')
                 answers    = record['answers']
                 benar      = record['benar']
                 salah      = record['salah']
                 kosong     = record['kosong']
                 score      = record['score']
-
                 density_nama     = record.get('density_nama',    np.zeros((26, 20)))
                 density_nim      = record.get('density_nim',     np.zeros((10, 10)))
                 density_tanggal  = record.get('density_tanggal', np.zeros((10, 6)))
                 density_jawaban  = record.get('density_jawaban', np.zeros((st.session_state.total_soal, 5)))
-
             # Identity card
             st.markdown(f"""
             <div class="card-sm" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap">
