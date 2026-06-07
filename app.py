@@ -2,7 +2,6 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import io
-import cv2
 from PIL import Image
 
 import config
