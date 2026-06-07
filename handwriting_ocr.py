@@ -14,7 +14,6 @@ from config import (
     N_CHARS
 )
 
-
 def label_to_char(label):
     label = int(label)
     if label < 10:
@@ -24,14 +23,12 @@ def label_to_char(label):
     else:
         return chr(ord('a') + label - 36)
 
-
 def extract_hog(img):
     return hog(img,
                orientations=HOG_ORIENTATIONS,
                pixels_per_cell=HOG_PIXELS_PER_CELL,
                cells_per_block=HOG_CELLS_PER_BLOCK,
                block_norm='L2-Hys')
-
 
 def augment_char(img, n=30):
     h, w = img.shape
@@ -56,12 +53,10 @@ def augment_char(img, n=30):
         results.append(aug)
     return results
 
-
 def load_or_train():
-    import tensorflow_datasets as tfds
-    
+    # Langsung membaca file model tanpa dependensi ke TensorFlow Datasets
     if os.path.exists(MODEL_PATH):
-        print('Model ditemukan, loading...')
+        print(f'Model ditemukan ({MODEL_PATH}), loading...')
         with open(MODEL_PATH, 'rb') as f:
             bundle = pickle.load(f)
         if 'chars' not in bundle:
@@ -69,81 +64,9 @@ def load_or_train():
         print(f'  Karakter: {len(bundle["chars"])} kelas: {sorted(bundle["chars"])}')
         return bundle
 
-    print('Training model with EMNIST ByClass AND custom uploaded characters (if any).')
-    print('  This will take a while (~10-15 minutes or more depending on sample size and resources).')
-
-    X_all, y_all = [], []
-    current_chars = set()
-
-    if os.path.exists(SAVE_DIR) and os.listdir(SAVE_DIR):
-        print(f'Collecting custom characters from {SAVE_DIR}...')
-        for fname in os.listdir(SAVE_DIR):
-            if not fname.endswith('.png'):
-                continue
-            char = fname.split('__')[0]
-            img = cv2.imread(os.path.join(SAVE_DIR, fname), cv2.IMREAD_GRAYSCALE)
-            if img is None:
-                continue
-
-            augmented_imgs = augment_char(img, n=10)
-
-            for aug_img in augmented_imgs:
-                feat = extract_hog(aug_img)
-                X_all.append(feat)
-                y_all.append(char)
-            current_chars.add(char)
-        print(f'  Collected {len(X_all)} custom samples for {len(current_chars)} characters: {sorted(list(current_chars))}')
-    else:
-        print(f'  No custom characters found in {SAVE_DIR}. Skipping custom sample collection.')
-
-    print('Downloading + loading EMNIST ByClass (~624 MB) and combining with collected samples...')
-    ds = tfds.load('emnist/byclass', split='train', as_supervised=True)
-
-    MAX_PER_CLS_EMNIST = 100
-    emnist_counts = {c: 0 for c in ALL_CHARS}
-
-    for img, label in tfds.as_numpy(ds):
-        char = label_to_char(label)
-        if char not in ALL_CHARS:
-            continue
-        if emnist_counts[char] >= MAX_PER_CLS_EMNIST:
-            continue
-
-        emnist_img = np.rot90(img.squeeze(), k=3)
-        emnist_img = np.fliplr(emnist_img)
-        emnist_img = cv2.resize(emnist_img, (CHAR_W, CHAR_H))
-        _, emnist_bw = cv2.threshold(emnist_img, 50, 255, cv2.THRESH_BINARY)
-
-        feat = extract_hog(emnist_bw)
-        X_all.append(feat)
-        y_all.append(char)
-        current_chars.add(char)
-        emnist_counts[char] += 1
-
-    if not X_all:
-        print('No data to train with after collecting custom and EMNIST samples!')
-        return None
-
-    X_all = np.array(X_all)
-    y_all = np.array(y_all)
-    print(f'\n  Total samples for training : {len(X_all)}')
-    print(f'  Total unique characters    : {len(current_chars)}: {sorted(list(current_chars))}')
-
-    print('Training SVM classifier...')
-    clf = Pipeline([
-        ('scaler', StandardScaler()),
-        ('svm', SVC(kernel=SVM_KERNEL, C=SVM_C, gamma=SVM_GAMMA,
-                    random_state=SVM_RANDOM_STATE, verbose=False))
-    ])
-    clf.fit(X_all, y_all)
-
-    bundle = {'clf': clf, 'chars': sorted(list(current_chars))}
-    with open(MODEL_PATH, 'wb') as f:
-        pickle.dump(bundle, f)
-    print(f'\nModel saved → {MODEL_PATH}')
-    print(f'Characters in model ({len(bundle["chars"])})\n    {bundle["chars"]}')
-    return bundle
-
+    # Proteksi cadangan jika file pkl gagal dibaca sistem server
+    print(f'PENGINGAT: File {MODEL_PATH} tidak terdeteksi di server!')
+    return {'clf': None, 'chars': ALL_CHARS}
 
 def preprocess(roi_bgr):
     b, g, r = cv2.split(roi_bgr.astype(np.float32))
@@ -165,11 +88,9 @@ def preprocess(roi_bgr):
     scale = max(1.0, 64 / h)
     return cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
 
-
 def binarize(gray):
     _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     return bw
-
 
 def segment_fixed(binary, n_chars):
     h, w = binary.shape
@@ -200,7 +121,6 @@ def segment_fixed(binary, n_chars):
 
     return chars, debug
 
-
 def predict_text(roi_bgr, bundle, label=''):
     gray = preprocess(roi_bgr)
     if gray is None:
@@ -216,7 +136,6 @@ def predict_text(roi_bgr, bundle, label=''):
     known = set(bundle['chars'])
     result = ''.join(l for l in labels if l in known)
     return result, binary, debug
-
 
 def postprocess(label, text):
     text = text.strip()
