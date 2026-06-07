@@ -572,9 +572,9 @@ if st.session_state.step == 'setup':
     col_btn, _ = st.columns([1, 3])
     with col_btn:
         if st.button("Mulai Scan  →", disabled=len(answer_key) == 0, width='stretch'):
-        if st.button("← Setup", width='stretch'):
-        if st.button("Lihat OCR →", disabled=..., width='stretch'):
-        if st.button("← Kembali ke OCR", width='content'):
+            if st.button("← Setup", width='stretch'):
+                if st.button("Lihat OCR →", disabled=..., width='stretch'):
+                    if st.button("← Kembali ke OCR", width='content'):
 
 
 elif st.session_state.step == 'scan':
