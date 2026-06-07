@@ -1,0 +1,10 @@
+[client]
+pageTitle = "LJK Scanner"
+mainScript = "app.py"
+
+[logger]
+level = "info"
+
+[theme]
+base = "dark"
+primaryColor = "#7288AE"
