@@ -585,11 +585,13 @@ elif st.session_state.step == 'scan':
 
     c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
-        if st.button("← Setup", use_container_width=True):
-            st.session_state.step = 'setup'; st.rerun()
+        if st.button("← Setup", width='stretch'):
+            st.session_state.step = 'setup'
+            st.rerun()
     with c2:
-        if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, use_container_width=True):
-            st.session_state.step = 'handwriting'; st.rerun()
+        if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, width='stretch'):
+            st.session_state.step = 'handwriting'
+            st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
