@@ -636,6 +636,7 @@ elif st.session_state.step == 'scan':
         unsafe_allow_html=True
     )
     st.markdown("<br>", unsafe_allow_html=True)
+
     c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
         if st.button("← Setup", width='stretch'):
@@ -653,8 +654,6 @@ elif st.session_state.step == 'scan':
       <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#EAE0CF;margin-bottom:4px">
         Upload atau Foto Langsung
       </div>
-      <div style="font-size:0.82rem;color:#7288AE">Pilih salah satu cara di bawah untuk memasukkan LJK.</div>
-    </div>
     """, unsafe_allow_html=True)
 
     upload_tab, camera_tab = st.tabs(["📁  Upload File", "📷  Ambil Foto (Webcam)"])
