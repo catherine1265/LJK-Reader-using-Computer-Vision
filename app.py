@@ -757,7 +757,9 @@ elif st.session_state.step == 'handwriting':
                 salah = record['salah']
                 kosong = record['kosong']
                 score = record['score']
-                density_nama = record['density_nama']
+                density_nama = record.get('density_nama', None) 
+                if density_nama is None:
+                    st.warning("Could not extract density features for 'nama'. Skipping or using default.")
                 density_nim = record['density_nim']
                 density_tanggal = record['density_tanggal']
                 density_jawaban = record['density_jawaban']
