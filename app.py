@@ -902,8 +902,7 @@ elif st.session_state.step == 'results':
         })
         
     df = pd.DataFrame(summary_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
-
+    st.dataframe(df, width='stretch', hide_index=True)
     # Menyediakan file CSV untuk di-download
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(
