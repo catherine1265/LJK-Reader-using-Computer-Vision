@@ -15,7 +15,7 @@ from corner_detection import find_corner_bubbles, warp_perspective
 from scanner import detect_answers, detect_nama, detect_nim, detect_tanggal
 from handwriting_ocr import load_or_train, predict_text, postprocess
 from eda import grade_from_score, calculate_score
-from utils import show_heatmap
+from utils import show_heatmap, show_heatmap_jawaban
 
 # ─── PAGE CONFIG ────────────────────────────────────────────
 st.set_page_config(
@@ -890,36 +890,44 @@ elif st.session_state.step == 'handwriting':
 
             with h_tab1:
                 ALPHABET = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+                x1, y1, x2, y2 = ALL_ROIS['NAMA']
                 show_heatmap(
                     density_map=density_nama,
                     title=f"Heatmap Nama OMR ({nama_text})",
                     y_labels=ALPHABET,
                     x_labels=[f"{i + 1}" for i in range(20)],
-                    cmap='RdYlGn'
+                    cmap='RdYlGn',
+                    roi_img=warped[y1:y2, x1:x2],
+                    roi_title="ROI Nama",
                 )
             with h_tab2:
+                x1, y1, x2, y2 = ALL_ROIS['NIM']
                 show_heatmap(
                     density_map=density_nim,
                     title=f"Heatmap NIM OMR ({nim_text})",
                     y_labels=[str(i) for i in range(10)],
                     x_labels=[f"{i + 1}" for i in range(10)],
-                    cmap='RdYlGn'
+                    cmap='RdYlGn',
+                    roi_img=warped[y1:y2, x1:x2],
+                    roi_title="ROI NIM",
                 )
             with h_tab3:
+                x1, y1, x2, y2 = ALL_ROIS['TANGGAL']
                 show_heatmap(
                     density_map=density_tanggal,
                     title=f"Heatmap Tanggal OMR ({tgl_text})",
                     y_labels=[str(i) for i in range(10)],
                     x_labels=[f"{i + 1}" for i in range(6)],
-                    cmap='RdYlGn'
+                    cmap='RdYlGn',
+                    roi_img=warped[y1:y2, x1:x2],
+                    roi_title="ROI Tanggal",
                 )
             with h_tab4:
-                show_heatmap(
+                show_heatmap_jawaban(
+                    warped=warped,
                     density_map=density_jawaban,
-                    title="Heatmap Lembar Jawaban (1-50)",
-                    y_labels=[f"Soal {i + 1}" for i in range(len(density_jawaban))],
-                    x_labels=['A', 'B', 'C', 'D', 'E'],
-                    cmap='jet'
+                    total_soal=st.session_state.total_soal,
+                    cmap='jet',
                 )
 
 # ─── STEP: RESULTS ─────────────────────────────────────────
