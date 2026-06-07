@@ -740,16 +740,14 @@ elif st.session_state.step == 'handwriting':
         st.stop()
 
     c1, c2, c3 = st.columns([1, 1, 5])
-        
-        with c1:
-            if st.button("← Setup", width='stretch'):
-                st.session_state.step = 'setup'
-                st.rerun()
-                
-        with c2:
-            if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, width='stretch'):
-                st.session_state.step = 'handwriting'
-                st.rerun()
+    with c1:
+        if st.button("← Setup", width='stretch'):
+            st.session_state.step = 'setup'
+            st.rerun()
+    with c2:
+        if st.button("Lihat Hasil →", disabled=len(st.session_state.records) == 0, width='stretch'):
+            st.session_state.step = 'results'
+            st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -835,6 +833,7 @@ elif st.session_state.step == 'handwriting':
                 density_nim      = record.get('density_nim',     np.zeros((10, 10)))
                 density_tanggal  = record.get('density_tanggal', np.zeros((10, 6)))
                 density_jawaban  = record.get('density_jawaban', np.zeros((st.session_state.total_soal, 5)))
+            
             # Identity card
             st.markdown(f"""
             <div class="card-sm" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap">
@@ -857,43 +856,43 @@ elif st.session_state.step == 'handwriting':
             </div>
             """, unsafe_allow_html=True)
             
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Handwriting Recognition section
-        st.markdown('<div class="section-label">Tulisan Tangan (Handwriting OCR)</div>', unsafe_allow_html=True)
-        from utils import show_handwriting
-        
-        hw_col1, hw_col2 = st.columns(2)
-        with hw_col1:
-            show_handwriting(
-                roi_img=warped[ALL_ROIS['NAMA_MATA_KULIAH'][1]:ALL_ROIS['NAMA_MATA_KULIAH'][3],
-                               ALL_ROIS['NAMA_MATA_KULIAH'][0]:ALL_ROIS['NAMA_MATA_KULIAH'][2]],
-                ocr_text=matkul_text,
-                label_name="Nama Mata Kuliah"
-            )
-        with hw_col2:
-            show_handwriting(
-                roi_img=warped[ALL_ROIS['KODE_KELAS'][1]:ALL_ROIS['KODE_KELAS'][3],
-                               ALL_ROIS['KODE_KELAS'][0]:ALL_ROIS['KODE_KELAS'][2]],
-                ocr_text=kode_text,
-                label_name="Kode Kelas"
-            )
-        
-        hw_col3, hw_col4 = st.columns(2)
-        with hw_col3:
-            show_handwriting(
-                roi_img=warped[ALL_ROIS['RUANGAN'][1]:ALL_ROIS['RUANGAN'][3],
-                               ALL_ROIS['RUANGAN'][0]:ALL_ROIS['RUANGAN'][2]],
-                ocr_text=ruangan_text,
-                label_name="Ruangan"
-            )
-        with hw_col4:
-            show_handwriting(
-                roi_img=warped[ALL_ROIS['NO_MEJA'][1]:ALL_ROIS['NO_MEJA'][3],
-                               ALL_ROIS['NO_MEJA'][0]:ALL_ROIS['NO_MEJA'][2]],
-                ocr_text=nomeja_text,
-                label_name="No. Meja"
-            )
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Handwriting Recognition section
+            st.markdown('<div class="section-label">Tulisan Tangan (Handwriting OCR)</div>', unsafe_allow_html=True)
+            
+            hw_col1, hw_col2 = st.columns(2)
+            with hw_col1:
+                show_handwriting(
+                    roi_img=warped[ALL_ROIS['NAMA_MATA_KULIAH'][1]:ALL_ROIS['NAMA_MATA_KULIAH'][3],
+                                   ALL_ROIS['NAMA_MATA_KULIAH'][0]:ALL_ROIS['NAMA_MATA_KULIAH'][2]],
+                    ocr_text=matkul_text,
+                    label_name="Nama Mata Kuliah"
+                )
+            with hw_col2:
+                show_handwriting(
+                    roi_img=warped[ALL_ROIS['KODE_KELAS'][1]:ALL_ROIS['KODE_KELAS'][3],
+                                   ALL_ROIS['KODE_KELAS'][0]:ALL_ROIS['KODE_KELAS'][2]],
+                    ocr_text=kode_text,
+                    label_name="Kode Kelas"
+                )
+            
+            hw_col3, hw_col4 = st.columns(2)
+            with hw_col3:
+                show_handwriting(
+                    roi_img=warped[ALL_ROIS['RUANGAN'][1]:ALL_ROIS['RUANGAN'][3],
+                                   ALL_ROIS['RUANGAN'][0]:ALL_ROIS['RUANGAN'][2]],
+                    ocr_text=ruangan_text,
+                    label_name="Ruangan"
+                )
+            with hw_col4:
+                show_handwriting(
+                    roi_img=warped[ALL_ROIS['NO_MEJA'][1]:ALL_ROIS['NO_MEJA'][3],
+                                   ALL_ROIS['NO_MEJA'][0]:ALL_ROIS['NO_MEJA'][2]],
+                    ocr_text=nomeja_text,
+                    label_name="No. Meja"
+                )
+
             st.markdown("<br>", unsafe_allow_html=True)
 
             # Score summary
