@@ -1,0 +1,235 @@
+import os
+import re
+import pickle
+import cv2
+import numpy as np
+import tensorflow_datasets as tfds
+from sklearn.svm import SVC
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+from skimage.feature import hog
+from config import (
+    CHAR_H, CHAR_W, ALL_CHARS, MODEL_PATH, SAVE_DIR,
+    HOG_ORIENTATIONS, HOG_PIXELS_PER_CELL, HOG_CELLS_PER_BLOCK,
+    SVM_KERNEL, SVM_C, SVM_GAMMA, SVM_RANDOM_STATE,
+    N_CHARS
+)
+
+
+def label_to_char(label):
+    label = int(label)
+    if label < 10:
+        return str(label)
+    elif label < 36:
+        return chr(ord('A') + label - 10)
+    else:
+        return chr(ord('a') + label - 36)
+
+
+def extract_hog(img):
+    return hog(img,
+               orientations=HOG_ORIENTATIONS,
+               pixels_per_cell=HOG_PIXELS_PER_CELL,
+               cells_per_block=HOG_CELLS_PER_BLOCK,
+               block_norm='L2-Hys')
+
+
+def augment_char(img, n=30):
+    h, w = img.shape
+    results = [img]
+    for _ in range(n):
+        aug = img.copy()
+        angle = np.random.uniform(-15, 15)
+        M = cv2.getRotationMatrix2D((w // 2, h // 2), angle, 1.0)
+        aug = cv2.warpAffine(aug, M, (w, h), borderValue=255)
+        sc = np.random.uniform(0.85, 1.15)
+        aug = cv2.resize(aug, (max(1, int(w * sc)), max(1, int(h * sc))))
+        aug = cv2.resize(aug, (w, h))
+        noise = np.random.normal(0, 8, aug.shape).astype(np.int16)
+        aug = np.clip(aug.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+        if np.random.rand() > 0.5:
+            aug = cv2.GaussianBlur(aug, (3, 3), 0)
+        dx = np.random.uniform(-4, 4)
+        pts1 = np.float32([[0, 0], [w, 0], [0, h]])
+        pts2 = np.float32([[dx, 0], [w + dx, 0], [0, h]])
+        M = cv2.getAffineTransform(pts1, pts2)
+        aug = cv2.warpAffine(aug, M, (w, h), borderValue=255)
+        results.append(aug)
+    return results
+
+
+def load_or_train():
+    if os.path.exists(MODEL_PATH):
+        print('Model ditemukan, loading...')
+        with open(MODEL_PATH, 'rb') as f:
+            bundle = pickle.load(f)
+        if 'chars' not in bundle:
+            bundle['chars'] = ALL_CHARS
+        print(f'  Karakter: {len(bundle["chars"])} kelas: {sorted(bundle["chars"])}')
+        return bundle
+
+    print('Training model with EMNIST ByClass AND custom uploaded characters (if any).')
+    print('  This will take a while (~10-15 minutes or more depending on sample size and resources).')
+
+    X_all, y_all = [], []
+    current_chars = set()
+
+    if os.path.exists(SAVE_DIR) and os.listdir(SAVE_DIR):
+        print(f'Collecting custom characters from {SAVE_DIR}...')
+        for fname in os.listdir(SAVE_DIR):
+            if not fname.endswith('.png'):
+                continue
+            char = fname.split('__')[0]
+            img = cv2.imread(os.path.join(SAVE_DIR, fname), cv2.IMREAD_GRAYSCALE)
+            if img is None:
+                continue
+
+            augmented_imgs = augment_char(img, n=10)
+
+            for aug_img in augmented_imgs:
+                feat = extract_hog(aug_img)
+                X_all.append(feat)
+                y_all.append(char)
+            current_chars.add(char)
+        print(f'  Collected {len(X_all)} custom samples for {len(current_chars)} characters: {sorted(list(current_chars))}')
+    else:
+        print(f'  No custom characters found in {SAVE_DIR}. Skipping custom sample collection.')
+
+    print('Downloading + loading EMNIST ByClass (~624 MB) and combining with collected samples...')
+    ds = tfds.load('emnist/byclass', split='train', as_supervised=True)
+
+    MAX_PER_CLS_EMNIST = 100
+    emnist_counts = {c: 0 for c in ALL_CHARS}
+
+    for img, label in tfds.as_numpy(ds):
+        char = label_to_char(label)
+        if char not in ALL_CHARS:
+            continue
+        if emnist_counts[char] >= MAX_PER_CLS_EMNIST:
+            continue
+
+        emnist_img = np.rot90(img.squeeze(), k=3)
+        emnist_img = np.fliplr(emnist_img)
+        emnist_img = cv2.resize(emnist_img, (CHAR_W, CHAR_H))
+        _, emnist_bw = cv2.threshold(emnist_img, 50, 255, cv2.THRESH_BINARY)
+
+        feat = extract_hog(emnist_bw)
+        X_all.append(feat)
+        y_all.append(char)
+        current_chars.add(char)
+        emnist_counts[char] += 1
+
+    if not X_all:
+        print('No data to train with after collecting custom and EMNIST samples!')
+        return None
+
+    X_all = np.array(X_all)
+    y_all = np.array(y_all)
+    print(f'\n  Total samples for training : {len(X_all)}')
+    print(f'  Total unique characters    : {len(current_chars)}: {sorted(list(current_chars))}')
+
+    print('Training SVM classifier...')
+    clf = Pipeline([
+        ('scaler', StandardScaler()),
+        ('svm', SVC(kernel=SVM_KERNEL, C=SVM_C, gamma=SVM_GAMMA,
+                    random_state=SVM_RANDOM_STATE, verbose=False))
+    ])
+    clf.fit(X_all, y_all)
+
+    bundle = {'clf': clf, 'chars': sorted(list(current_chars))}
+    with open(MODEL_PATH, 'wb') as f:
+        pickle.dump(bundle, f)
+    print(f'\nModel saved → {MODEL_PATH}')
+    print(f'Characters in model ({len(bundle["chars"])})\n    {bundle["chars"]}')
+    return bundle
+
+
+def preprocess(roi_bgr):
+    b, g, r = cv2.split(roi_bgr.astype(np.float32))
+    gray = np.clip(r * 0.8 + g * 0.15 + b * 0.05, 0, 255).astype(np.uint8)
+
+    h, w = gray.shape
+    gray = gray[int(h * 0.08):h - int(h * 0.08),
+                int(w * 0.08):w - int(w * 0.08)]
+    if gray.size == 0:
+        return None
+
+    p_lo, p_hi = np.percentile(gray, 10), np.percentile(gray, 90)
+    if p_hi > p_lo:
+        gray = np.clip((gray.astype(np.float32) - p_lo) / (p_hi - p_lo) * 255, 0, 255).astype(np.uint8)
+
+    gray = cv2.filter2D(gray, -1, np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]]))
+
+    h, w = gray.shape
+    scale = max(1.0, 64 / h)
+    return cv2.resize(gray, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
+
+
+def binarize(gray):
+    _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    return bw
+
+
+def segment_fixed(binary, n_chars):
+    h, w = binary.shape
+    char_w = w // n_chars
+    chars = []
+
+    for i in range(n_chars):
+        x0 = i * char_w
+        x1 = (i + 1) * char_w if i < n_chars - 1 else w
+        crop = binary[:, x0:x1]
+
+        row_proj = np.sum(crop, axis=1)
+        rows = np.where(row_proj > 0)[0]
+        if len(rows) > 0:
+            y0, y1 = rows[0], rows[-1] + 1
+            crop = crop[y0:y1, :]
+
+        if crop.size == 0:
+            crop = np.zeros((CHAR_H, CHAR_W), dtype=np.uint8)
+
+        crop = cv2.resize(crop, (CHAR_W, CHAR_H), interpolation=cv2.INTER_AREA)
+        chars.append(crop)
+
+    debug = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+    for i in range(1, n_chars):
+        x = i * char_w
+        cv2.line(debug, (x, 0), (x, h), (0, 255, 0), 2)
+
+    return chars, debug
+
+
+def predict_text(roi_bgr, bundle, label=''):
+    gray = preprocess(roi_bgr)
+    if gray is None:
+        empty = np.zeros((10, 10), np.uint8)
+        return '', empty, cv2.cvtColor(empty, cv2.COLOR_GRAY2BGR)
+
+    binary = binarize(gray)
+    n = N_CHARS.get(label, 6)
+    chars, debug = segment_fixed(binary, n)
+
+    feats = np.array([extract_hog(c) for c in chars])
+    labels = bundle['clf'].predict(feats)
+    known = set(bundle['chars'])
+    result = ''.join(l for l in labels if l in known)
+    return result, binary, debug
+
+
+def postprocess(label, text):
+    text = text.strip()
+    if label == 'NAMA_MATA_KULIAH':
+        text = re.sub(r'^[^A-Za-z]+', '', text)
+        corrections = {
+            'Pomputer': 'Computer', 'Gomputer': 'Computer',
+            'Yision': 'Vision',
+        }
+        for wrong, right in corrections.items():
+            text = re.sub(wrong, right, text, flags=re.IGNORECASE)
+        text = text.title()
+    elif label in ('KODE_KELAS', 'RUANGAN'):
+        text = text.replace(' ', '').upper()
+    elif label == 'NO_MEJA':
+        text = ''.join(re.findall(r'\d+', text))
+    return text
