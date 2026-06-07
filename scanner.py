@@ -185,6 +185,7 @@ def detect_answers(warped, total_soal=50):
     
     all_answers = {}
     soal_done = 0
+    heatmap_list = [] # Wadah penampung matriks baris soal
     
     for label, x1, y1, x2, y2, q_start in ROI_JAWABAN:
         if soal_done >= total_soal:
@@ -194,16 +195,23 @@ def detect_answers(warped, total_soal=50):
         roi_bgr = warped[y1:y2, x1:x2]
         roi_gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
         
-        r_blok, _, _, _, _, _ = scan_grid(
+        # TANGKAP density_map dari scan_grid
+        r_blok, d_map, _, _, _, _ = scan_grid(
             roi_gray, num_cols=5, num_rows=10,
             labels=CHOICES, per_row=True)
         
-        r_aktif = r_blok[:soal_di_blok]
+        # Ambil d_map sesuai jumlah soal aktif lalu masukkan ke list
+        heatmap_list.append(d_map[:soal_di_blok])
         
+        r_aktif = r_blok[:soal_di_blok]
         for i, ans in enumerate(r_aktif):
             q = q_start + i
             all_answers[q] = ans
         
         soal_done += soal_di_blok
+        
+    # Gabungkan semua matriks menjadi satu heatmap besar secara vertikal
+    full_heatmap = np.vstack(heatmap_list) if heatmap_list else np.zeros((10, 5))
     
-    return all_answers
+    # KEMBALIKAN DUA NILAI: Hasil jawaban DAN Matriks Heatmap
+    return all_answers, full_heatmap
