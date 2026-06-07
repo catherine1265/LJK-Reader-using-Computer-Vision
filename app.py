@@ -1,8 +1,19 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+import cv2
 import io
-from PIL import Image as PILImage
+from PIL import Image
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+from config import ALL_ROIS
+from corner_detection import find_corner_bubbles, warp_perspective
+from bubble_detection import detect_nama, detect_nim, detect_tanggal, detect_answers
+from handwriting_ocr import load_or_train, predict_text, postprocess
+from eda import grade_from_score, calculate_score
 
 # ─── PAGE CONFIG ────────────────────────────────────────────
 st.set_page_config(
@@ -16,20 +27,33 @@ st.set_page_config(
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
 :root {
   --navy:    #111844;
   --mid:     #4B5694;
   --steel:   #7288AE;
   --cream:   #EAE0CF;
+  --cream2:  #F5F0E8;
   --white:   #FFFFFF;
+  --success: #3D8B6E;
+  --warn:    #C47C2B;
+  --danger:  #B34040;
+  --text:    #EAE0CF;
+  --text-dim:#7288AE;
 }
+
 html, body, [data-testid="stAppViewContainer"] {
   background: var(--navy) !important;
   font-family: 'DM Sans', sans-serif !important;
   color: var(--cream) !important;
 }
-[data-testid="stAppViewContainer"] > .main { background: transparent !important; }
-[data-testid="block-container"] { padding: 2rem 2.5rem 3rem !important; }
+[data-testid="stAppViewContainer"] > .main {
+  background: transparent !important;
+}
+[data-testid="block-container"] {
+  padding: 2rem 2.5rem 3rem !important;
+}
+
 [data-testid="stSidebar"] {
   background: #0C1235 !important;
   border-right: 1px solid rgba(74,86,148,0.3) !important;
@@ -43,26 +67,37 @@ html, body, [data-testid="stAppViewContainer"] {
   border-radius: 8px;
   font-size: 0.8rem;
   padding: 6px 10px;
+  transition: all .2s;
 }
+[data-testid="stSidebar"] .stButton > button:hover {
+  background: rgba(74,86,148,0.35) !important;
+  border-color: var(--steel) !important;
+}
+
 h1, h2, h3 { font-family: 'DM Serif Display', serif !important; color: var(--cream) !important; }
 .serif-title {
   font-family: 'DM Serif Display', serif;
   font-size: 2.4rem;
   color: var(--cream);
   line-height: 1.15;
+  letter-spacing: -0.02em;
 }
+.serif-title span { color: var(--cream); font-style: italic; background: linear-gradient(135deg, #EAE0CF, #7288AE); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .section-label {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.68rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: #9BAABF;
+  margin-bottom: 0.4rem;
 }
 .page-subtitle {
   color: var(--steel);
   font-size: 0.95rem;
   font-weight: 300;
+  margin-top: 0.3rem;
 }
+
 .step-nav {
   display: flex;
   gap: 0;
@@ -78,9 +113,12 @@ h1, h2, h3 { font-family: 'DM Serif Display', serif !important; color: var(--cre
   font-size: 0.78rem;
   font-weight: 500;
   background: rgba(255,255,255,0.02);
-  color: var(--steel);
+  color: var(--text-dim);
+  transition: all .2s;
   border-right: 1px solid rgba(74,86,148,0.2);
+  cursor: default;
 }
+.step-item:last-child { border-right: none; }
 .step-item.active {
   background: linear-gradient(180deg, rgba(74,86,148,0.3), rgba(17,24,68,0.4));
   color: var(--cream);
@@ -91,11 +129,14 @@ h1, h2, h3 { font-family: 'DM Serif Display', serif !important; color: var(--cre
   background: rgba(74,86,148,0.12);
   color: #7288AE;
 }
+.step-icon { font-size: 1rem; display: block; margin-bottom: 3px; }
+
 .card {
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(74,86,148,0.25);
+  border-top: 2px solid rgba(234,224,207,0.3);
   border-radius: 16px;
-  padding: 1.2rem 1.5rem;
+  padding: 1.2rem 1.5rem 0.8rem;
   margin-bottom: 1rem;
 }
 .card-sm {
@@ -104,6 +145,7 @@ h1, h2, h3 { font-family: 'DM Serif Display', serif !important; color: var(--cre
   border-radius: 12px;
   padding: 1rem 1.2rem;
 }
+
 .metrics-row {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
@@ -113,68 +155,188 @@ h1, h2, h3 { font-family: 'DM Serif Display', serif !important; color: var(--cre
 .metric-tile {
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(74,86,148,0.2);
+  border-top: 2px solid rgba(234,224,207,0.2);
   border-radius: 14px;
   padding: 18px 14px;
   text-align: center;
+  transition: transform .2s, border-color .2s;
 }
+.metric-tile:hover { transform: translateY(-2px); border-color: var(--steel); }
 .metric-tile .t-val {
   font-family: 'DM Serif Display', serif;
   font-size: 2rem;
+  line-height: 1;
   margin-bottom: 6px;
 }
 .metric-tile .t-lbl {
   font-size: 0.7rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--steel);
+  color: var(--text-dim);
 }
 .c-blue   { color: #7CA4D4; }
 .c-green  { color: #6DBF9E; }
 .c-red    { color: #E07575; }
+.c-grey   { color: #7288AE; }
 .c-amber  { color: #D4A96A; }
 .c-cream  { color: var(--cream); }
+
+.answer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+  gap: 6px;
+  margin-top: 0.8rem;
+}
+.ans-cell {
+  border-radius: 8px;
+  padding: 6px 4px;
+  text-align: center;
+  font-size: 0.72rem;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid rgba(74,86,148,0.2);
+  background: rgba(255,255,255,0.02);
+}
+.ans-cell.correct { background: rgba(61,139,110,0.15); border-color: #3D8B6E; color: #6DBF9E; }
+.ans-cell.wrong   { background: rgba(179,64,64,0.15);  border-color: #B34040; color: #E07575; }
+.ans-cell.empty   { opacity: 0.45; }
+
+.stTextInput input, .stNumberInput input, .stTextArea textarea, .stSelectbox select {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(74,86,148,0.35) !important;
+  border-radius: 10px !important;
+  color: var(--cream) !important;
+  font-family: 'DM Sans', sans-serif !important;
+}
+.stTextInput input:focus, .stTextArea textarea:focus {
+  border-color: var(--steel) !important;
+  box-shadow: 0 0 0 2px rgba(114,136,174,0.15) !important;
+}
+label, .stSelectbox label, .stTextInput label,
+.stNumberInput label, .stTextArea label {
+  color: var(--steel) !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.04em !important;
+}
+.stButton > button {
+  background: linear-gradient(135deg, #4B5694, #3d4878) !important;
+  color: #EAE0CF !important;
+  border: 1px solid rgba(234,224,207,0.15) !important;
+  border-radius: 10px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  font-weight: 600 !important;
+  padding: 10px 24px !important;
+  transition: all .2s !important;
+  letter-spacing: 0.02em !important;
+}
+.stButton > button:hover {
+  background: linear-gradient(135deg, #7288AE, #4B5694) !important;
+  border-color: rgba(234,224,207,0.35) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 20px rgba(17,24,68,0.5) !important;
+}
+.stTabs [data-baseweb="tab-list"] {
+  background: rgba(255,255,255,0.03) !important;
+  border-radius: 10px !important;
+  padding: 4px !important;
+  gap: 4px !important;
+  border: 1px solid rgba(74,86,148,0.2) !important;
+}
+.stTabs [data-baseweb="tab"] {
+  background: transparent !important;
+  color: var(--text-dim) !important;
+  border-radius: 8px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+}
+.stTabs [aria-selected="true"] {
+  background: rgba(74,86,148,0.35) !important;
+  color: var(--cream) !important;
+}
+[data-testid="stExpander"] {
+  background: rgba(255,255,255,0.02) !important;
+  border: 1px solid rgba(74,86,148,0.2) !important;
+  border-radius: 12px !important;
+}
+[data-testid="stExpander"] summary {
+  color: var(--cream) !important;
+  font-weight: 500 !important;
+}
+.stFileUploader {
+  background: rgba(255,255,255,0.02) !important;
+  border: 2px dashed rgba(74,86,148,0.4) !important;
+  border-radius: 14px !important;
+}
+.stDownloadButton > button {
+  background: rgba(61,139,110,0.2) !important;
+  border: 1px solid rgba(61,139,110,0.5) !important;
+  color: #6DBF9E !important;
+}
+.stDownloadButton > button:hover {
+  background: rgba(61,139,110,0.35) !important;
+}
+
+hr { border-color: rgba(74,86,148,0.2) !important; }
+
+.heatmap-wrap {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(74,86,148,0.2);
+  border-radius: 14px;
+  padding: 1.2rem;
+}
+.heatmap-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--steel);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 0.8rem;
+}
+
 .badge {
   display: inline-block;
   padding: 3px 10px;
   border-radius: 20px;
   font-size: 0.7rem;
   font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-.badge-green { background: rgba(61,139,110,0.2); color: #6DBF9E; border: 1px solid rgba(61,139,110,0.3); }
 .badge-blue  { background: rgba(114,136,174,0.2); color: #7CA4D4; border: 1px solid rgba(114,136,174,0.3); }
-.badge-amber { background: rgba(196,124,43,0.2); color: #D4A96A; border: 1px solid rgba(196,124,43,0.3); }
-.stButton > button {
-  background: linear-gradient(135deg, #4B5694, #3d4878) !important;
-  color: #EAE0CF !important;
-  border: 1px solid rgba(234,224,207,0.15) !important;
-  border-radius: 10px !important;
-  font-weight: 600 !important;
-  padding: 10px 24px !important;
+.badge-green { background: rgba(61,139,110,0.2);  color: #6DBF9E; border: 1px solid rgba(61,139,110,0.3); }
+.badge-amber { background: rgba(196,124,43,0.2);  color: #D4A96A; border: 1px solid rgba(196,124,43,0.3); }
+.badge-red   { background: rgba(179,64,64,0.2);   color: #E07575; border: 1px solid rgba(179,64,64,0.3); }
+
+.prog-bar-wrap { margin: 6px 0; }
+.prog-bar-label {
+  display: flex; justify-content: space-between;
+  font-size: 0.72rem; color: var(--text-dim); margin-bottom: 3px;
 }
-.stTextInput input, .stNumberInput input, .stSelectbox select {
-  background: rgba(255,255,255,0.05) !important;
-  border: 1px solid rgba(74,86,148,0.35) !important;
-  border-radius: 10px !important;
-  color: var(--cream) !important;
+.prog-bar-bg {
+  background: rgba(74,86,148,0.15);
+  border-radius: 4px; height: 6px; overflow: hidden;
 }
+.prog-bar-fill { height: 100%; border-radius: 4px; transition: width .6s ease; }
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(74,86,148,0.4); border-radius: 3px; }
 </style>
 """, unsafe_allow_html=True)
 
 # ─── SESSION STATE ───────────────────────────────────────────
 def init_state():
     defaults = {
-        'answer_key': {},
-        'total_soal': 50,
-        'sesi_nama': '',
-        'kode_kelas': '',
-        'kode_dosen': '',
-        'scoring': 'standard',
-        'records': [],
-        'step': 'setup',
-        'key_text': '',
-        'ocr_model': None,
-        'ocr_accuracy': None,
+        'answer_key':   {},
+        'total_soal':   50,
+        'sesi_nama':    '',
+        'kode_kelas':   '',
+        'kode_dosen':   '',
+        'records':      [],
+        'step':         'setup',
+        'key_text':     '',
+        'bundle':       None,  # SVM model
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -187,7 +349,11 @@ DEFAULT_50 = ['B','C','A','D','E','A','B','C','D','A','E','B','C','A','D','B','E
               'B','D','A','C','E','A','D','B','E','C']
 
 def make_key_text(n):
-    return "\n".join(f"{i}. {DEFAULT_50[i-1] if i <= 50 else 'A'}" for i in range(1, n+1))
+    lines = []
+    for i in range(1, n+1):
+        ans = DEFAULT_50[i-1] if i <= 50 else 'A'
+        lines.append(f"{i}. {ans}")
+    return "\n".join(lines)
 
 if not st.session_state.key_text:
     st.session_state.key_text = make_key_text(st.session_state.total_soal)
@@ -196,11 +362,11 @@ if not st.session_state.key_text:
 with st.sidebar:
     st.markdown("""
     <div style="padding: 12px 0 16px">
-      <div style="font-family:'DM Serif Display',serif; font-size:1.9rem; color:#EAE0CF">
+      <div style="font-family:'DM Serif Display',serif; font-size:1.9rem; color:#EAE0CF; line-height:1.1; letter-spacing:-0.02em">
         LJK Scanner
       </div>
-      <div style="font-size:0.82rem; color:#7288AE; margin-top:6px; letter-spacing:0.1em; text-transform:uppercase">
-        Computer Vision
+      <div style="font-size:0.82rem; color:#7288AE; margin-top:6px; letter-spacing:0.1em; text-transform:uppercase; font-weight:500">
+        Computer Vision Project
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -208,66 +374,97 @@ with st.sidebar:
     st.divider()
 
     steps = [
-        ('setup',       '⚙', 'Setup'),
-        ('scan',        '📸', 'Scan'),
-        ('handwriting', '✍', 'Handwriting'),
-        ('eda',         '📊', 'EDA'),
+        ('setup',        '⚙', 'Setup'),
+        ('scan',         '📸', 'Scan'),
+        ('handwriting',  '✍️', 'OCR'),
+        ('results',      '📊', 'Hasil'),
     ]
     cur = st.session_state.step
-    cur_idx = [s[0] for s in steps].index(cur)
+    cur_idx = [s[0] for s in steps].index(cur) if cur in [s[0] for s in steps] else 0
 
     for i, (s, icon, lbl) in enumerate(steps):
-        cls = "done" if i < cur_idx else "active" if i == cur_idx else ""
-        dot = "✓" if i < cur_idx else icon
+        if i < cur_idx:
+            cls = "done"; dot = "✓"
+        elif i == cur_idx:
+            cls = "active"; dot = icon
+        else:
+            cls = ""; dot = icon
         st.markdown(
             f'<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;'
             f'border-radius:8px;margin-bottom:4px;'
-            f'background:{"rgba(74,86,148,0.2)" if cls=="active" else "rgba(61,139,110,0.1)" if cls=="done" else "transparent"}">'
+            f'background:{"rgba(74,86,148,0.2)" if cls=="active" else "rgba(61,139,110,0.1)" if cls=="done" else "transparent"};'
+            f'border:1px solid {"rgba(74,86,148,0.4)" if cls=="active" else "rgba(61,139,110,0.25)" if cls=="done" else "transparent"}">'
             f'<span style="font-size:1rem">{dot}</span>'
-            f'<span style="color:{"#EAE0CF" if cls in ["active","done"] else "#4B5694"};'
-            f'font-weight:{"600" if cls=="active" else "400"}">{lbl}</span></div>',
+            f'<span style="font-size:0.92rem;color:{"#EAE0CF" if cls in ["active","done"] else "#4B5694"};'
+            f'font-weight:{"600" if cls=="active" else "400"}">{lbl}</span>'
+            f'</div>',
             unsafe_allow_html=True
         )
 
     st.divider()
+
     records = st.session_state.records
     if records:
-        scores = [r['score'] for r in records]
+        scores = [r.get('score', 0) for r in records]
         st.markdown(f'<div class="section-label">Sesi Aktif</div>', unsafe_allow_html=True)
         st.markdown(f"""
-        <div class="card-sm">
+        <div class="card-sm" style="margin-bottom:8px">
           <div style="font-size:0.78rem;color:#7288AE;margin-bottom:8px">
             {st.session_state.sesi_nama or "—"}<br>
             <span style="font-size:0.68rem;font-family:monospace">{st.session_state.kode_kelas}</span>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
             <div style="text-align:center">
-              <div style="font-family:'DM Serif Display',serif;font-size:1.5rem">{len(records)}</div>
-              <div style="font-size:0.65rem;color:#4B5694;text-transform:uppercase">Scanned</div>
+              <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:#EAE0CF">{len(records)}</div>
+              <div style="font-size:0.65rem;color:#4B5694;text-transform:uppercase;letter-spacing:0.1em">Scanned</div>
             </div>
             <div style="text-align:center">
               <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:#7CA4D4">{np.mean(scores):.1f}</div>
-              <div style="font-size:0.65rem;color:#4B5694;text-transform:uppercase">Avg</div>
+              <div style="font-size:0.65rem;color:#4B5694;text-transform:uppercase;letter-spacing:0.1em">Avg</div>
             </div>
           </div>
         </div>
         """, unsafe_allow_html=True)
+
+        grade_counts = {'A':0,'B':0,'C':0,'D':0,'E':0}
+        for s in scores:
+            if s>=80: grade_counts['A']+=1
+            elif s>=70: grade_counts['B']+=1
+            elif s>=60: grade_counts['C']+=1
+            elif s>=50: grade_counts['D']+=1
+            else: grade_counts['E']+=1
+        grade_colors = {'A':'#6DBF9E','B':'#7CA4D4','C':'#D4A96A','D':'#E07575','E':'#9B7E7E'}
+        for g, cnt in grade_counts.items():
+            if cnt == 0: continue
+            pct = cnt / len(records) * 100
+            st.markdown(f"""
+            <div class="prog-bar-wrap">
+              <div class="prog-bar-label"><span>Grade {g}</span><span>{cnt}</span></div>
+              <div class="prog-bar-bg">
+                <div class="prog-bar-fill" style="width:{pct}%;background:{grade_colors[g]}"></div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
     else:
-        st.markdown('<div style="color:#4B5694;font-size:0.88rem;padding:8px 0;font-style:italic">Belum ada data</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="color:#4B5694;font-size:0.88rem;padding:8px 0;font-style:italic">Belum ada data scan</div>', unsafe_allow_html=True)
 
     st.divider()
     if st.button("↺  Reset Sesi"):
-        for k in ['answer_key','records','step','sesi_nama','kode_kelas','kode_dosen','key_text','ocr_model','ocr_accuracy']:
+        for k in ['answer_key','records','step','sesi_nama','kode_kelas','kode_dosen','key_text','bundle']:
             if k in st.session_state:
                 del st.session_state[k]
         st.rerun()
 
-# ─── STEP INDICATOR ─────────────────────────────────────────
+# ─── STEP INDICATOR ────────────────────────────────────────
 step_html = '<div class="step-nav">'
 for i, (s, icon, lbl) in enumerate(steps):
-    cls = "done" if i < cur_idx else "active" if i == cur_idx else ""
-    badge = "✓" if i < cur_idx else icon
-    step_html += f'<div class="step-item {cls}"><span style="font-size:1rem">{badge}</span>{lbl}</div>'
+    if i < cur_idx:
+        cls = "done"; badge_icon = "✓"
+    elif i == cur_idx:
+        cls = "active"; badge_icon = icon
+    else:
+        cls = ""; badge_icon = icon
+    step_html += f'<div class="step-item {cls}"><span class="step-icon">{badge_icon}</span>{lbl}</div>'
 step_html += '</div>'
 st.markdown(step_html, unsafe_allow_html=True)
 
@@ -277,23 +474,24 @@ st.markdown(step_html, unsafe_allow_html=True)
 if st.session_state.step == 'setup':
     st.markdown('<div class="section-label">Langkah 01</div>', unsafe_allow_html=True)
     st.markdown('<div class="serif-title">Setup <span>Sesi Ujian</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="page-subtitle">Konfigurasikan parameter ujian dan kunci jawaban.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-subtitle">Konfigurasikan parameter ujian dan input kunci jawaban sebelum memulai scan.</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
     col1, col2 = st.columns([1, 1], gap="large")
 
     with col1:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;
-          padding-bottom:12px;border-bottom:1px solid rgba(114,136,174,0.2)">
-          <div style="width:3px;height:22px;background:#7288AE;border-radius:2px"></div>
-          <div>
-            <div style="font-family:'DM Serif Display',serif;font-size:1rem;color:#EAE0CF">Informasi Sesi</div>
-            <div style="font-size:0.65rem;color:#4B5694;letter-spacing:0.1em;text-transform:uppercase;margin-top:1px">Parameter</div>
+        st.markdown('''
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.2rem;
+            padding-bottom:12px;border-bottom:1px solid rgba(114,136,174,0.2)">
+            <div style="width:3px;height:22px;background:linear-gradient(180deg,#EAE0CF,#7288AE);
+              border-radius:2px;flex-shrink:0"></div>
+            <div>
+              <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#EAE0CF">Informasi Sesi</div>
+              <div style="font-size:0.68rem;color:#4B5694;letter-spacing:0.1em;text-transform:uppercase;margin-top:1px">Parameter ujian</div>
+            </div>
           </div>
-        </div>
-        """, unsafe_allow_html=True)
+        ''', unsafe_allow_html=True)
 
         st.session_state.sesi_nama = st.text_input("Nama Sesi / Mata Kuliah", value=st.session_state.sesi_nama or "Computer Vision UAS")
         c1, c2 = st.columns(2)
@@ -308,52 +506,49 @@ if st.session_state.step == 'setup':
             st.session_state.key_text = make_key_text(new_total)
             st.rerun()
 
-        st.session_state.scoring = st.selectbox(
-            "Metode Penilaian",
-            ["standard", "penalty"],
-            format_func=lambda x: "Standar — (Benar / Total) × 100" if x == "standard" else "Penalty — Benar − (Salah × 0.25)"
-        )
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;
-          padding-bottom:12px;border-bottom:1px solid rgba(114,136,174,0.2)">
-          <div style="width:3px;height:22px;background:#7288AE;border-radius:2px"></div>
-          <div>
-            <div style="font-family:'DM Serif Display',serif;font-size:1rem;color:#EAE0CF">Kunci Jawaban</div>
-            <div style="font-size:0.65rem;color:#4B5694;letter-spacing:0.1em;text-transform:uppercase;margin-top:1px">Format: 1. A</div>
+        st.markdown('''
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.2rem;
+            padding-bottom:12px;border-bottom:1px solid rgba(114,136,174,0.2)">
+            <div style="width:3px;height:22px;background:linear-gradient(180deg,#EAE0CF,#7288AE);
+              border-radius:2px;flex-shrink:0"></div>
+            <div>
+              <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#EAE0CF">Kunci Jawaban</div>
+              <div style="font-size:0.68rem;color:#4B5694;letter-spacing:0.1em;text-transform:uppercase;margin-top:1px">Format: 1. A, 2. B, ...</div>
+            </div>
           </div>
-        </div>
-        """, unsafe_allow_html=True)
+        ''', unsafe_allow_html=True)
 
-        key_text = st.text_area("Format: `1. A`, `2. B`, ...", value=st.session_state.key_text, height=280, label_visibility="collapsed")
+        key_text = st.text_area(
+            "Format: `1. A`, `2. B`, ...",
+            value=st.session_state.key_text,
+            height=280,
+            label_visibility="collapsed"
+        )
         st.session_state.key_text = key_text
 
-        answer_key = {}
-        errors = []
+        answer_key = {}; errors = []
         for line in key_text.strip().split('\n'):
             line = line.strip()
-            if not line:
-                continue
-            parts = line.split('. ', 1) if '. ' in line else line.split(',', 1)
-            if len(parts) != 2:
-                errors.append(f"Format salah: `{line}`")
-                continue
+            if not line: continue
+            if '. ' in line:
+                parts = line.split('. ', 1)
+            else:
+                parts = line.split(',', 1)
+            if len(parts) != 2: errors.append(f"Format salah: `{line}`"); continue
             try:
-                q = int(parts[0].strip())
-                ans = parts[1].strip().upper()
+                q = int(parts[0].strip()); ans = parts[1].strip().upper()
                 if ans not in ['A','B','C','D','E']:
-                    errors.append(f"Jawaban tidak valid di soal {q}: `{ans}`")
-                    continue
+                    errors.append(f"Jawaban tidak valid di soal {q}: `{ans}`"); continue
                 answer_key[q] = ans
             except ValueError:
                 errors.append(f"Nomor tidak valid: `{line}`")
 
         if errors:
-            for e in errors[:2]:
-                st.error(e)
+            for e in errors[:2]: st.error(e)
         else:
             total = st.session_state.total_soal
             filled = len(answer_key)
@@ -378,55 +573,62 @@ if st.session_state.step == 'setup':
     st.markdown("<br>", unsafe_allow_html=True)
     col_btn, _ = st.columns([1, 3])
     with col_btn:
-        if st.button("Mulai Scan  →", disabled=len(answer_key) == 0):
+        if st.button("Mulai Scan  →", disabled=len(answer_key) == 0, use_container_width=True):
             st.session_state.answer_key = answer_key
             st.session_state.step = 'scan'
             st.rerun()
 
 # ══════════════════════════════════════════════════════════════
-#  STEP 2 — SCAN
+#  STEP 2 — SCAN (with corner detection + warp + zscore)
 # ══════════════════════════════════════════════════════════════
 elif st.session_state.step == 'scan':
     st.markdown('<div class="section-label">Langkah 02</div>', unsafe_allow_html=True)
     st.markdown('<div class="serif-title">Scan <span>Lembar Jawaban</span></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} · {st.session_state.kode_kelas} · {st.session_state.total_soal} soal · {len(st.session_state.records)} lembar ter-scan</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {st.session_state.kode_kelas} &nbsp;·&nbsp; {st.session_state.total_soal} soal &nbsp;·&nbsp; {len(st.session_state.records)} lembar ter-scan</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    c1, c2, _ = st.columns([1, 1, 4])
+    c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
-        if st.button("← Setup"):
-            st.session_state.step = 'setup'
-            st.rerun()
+        if st.button("← Setup", use_container_width=True):
+            st.session_state.step = 'setup'; st.rerun()
     with c2:
-        if st.button("Handwriting OCR →", disabled=len(st.session_state.records) == 0):
-            st.session_state.step = 'handwriting'
-            st.rerun()
+        if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, use_container_width=True):
+            st.session_state.step = 'handwriting'; st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown("""
     <div style="margin-bottom:0.6rem">
-      <div style="font-family:'DM Serif Display',serif;font-size:1rem;color:#EAE0CF;margin-bottom:4px">
-        Upload Foto LJK
+      <div style="font-family:'DM Serif Display',serif;font-size:1.05rem;color:#EAE0CF;margin-bottom:4px">
+        Upload atau Foto Langsung
       </div>
-      <div style="font-size:0.82rem;color:#7288AE">Pilih file atau ambil foto dengan webcam.</div>
+      <div style="font-size:0.82rem;color:#7288AE">Pilih salah satu cara di bawah untuk memasukkan LJK.</div>
     </div>
     """, unsafe_allow_html=True)
 
-    upload_tab, camera_tab = st.tabs(["📁  Upload File", "📷  Webcam"])
+    upload_tab, camera_tab = st.tabs(["📁  Upload File", "📷  Ambil Foto (Webcam)"])
 
     uploaded_files = []
-    
+
     with upload_tab:
         st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-        _files = st.file_uploader("Pilih foto LJK (JPG / PNG)", type=["jpg", "jpeg", "png"], accept_multiple_files=True, label_visibility="visible")
+        _files = st.file_uploader(
+            "Pilih foto LJK (JPG / PNG) — bisa lebih dari satu",
+            type=["jpg", "jpeg", "png"],
+            accept_multiple_files=True,
+            label_visibility="visible",
+        )
         if _files:
             uploaded_files = _files
 
     with camera_tab:
         st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-        st.markdown('<div style="font-size:0.8rem;color:#7288AE;margin-bottom:8px">Arahkan kamera ke LJK.</div>', unsafe_allow_html=True)
-        camera_image = st.camera_input("Ambil foto", label_visibility="collapsed")
+        st.markdown(
+            '<div style="font-size:0.8rem;color:#7288AE;margin-bottom:8px">'
+            'Arahkan kamera ke LJK, pastikan semua sudut terlihat jelas.</div>',
+            unsafe_allow_html=True
+        )
+        camera_image = st.camera_input("Ambil foto LJK", label_visibility="collapsed")
         if camera_image is not None:
             uploaded_files = [camera_image]
 
@@ -436,293 +638,234 @@ elif st.session_state.step == 'scan':
         for uploaded in uploaded_files:
             fname = getattr(uploaded, 'name', None) or 'webcam_capture.jpg'
             if any(r['filename'] == fname for r in st.session_state.records):
-                st.warning(f"⚠️ `{fname}` sudah di-scan.")
+                st.warning(f"⚠️ `{fname}` sudah di-scan, dilewati.")
                 continue
 
             with st.expander(f"📄  {fname}", expanded=True):
-                try:
-                    img_pil = PILImage.open(uploaded)
-                    
-                    try:
-                        import scanner
-                        
-                        if not hasattr(scanner, 'warp_ljk'):
-                            st.error("❌ Function `scanner.warp_ljk()` belum ada.")
-                            st.info("📝 Pastikan scanner.py sudah diimplementasikan dengan benar.")
-                            continue
-                        
-                        warped_np, ok = scanner.warp_ljk(img_pil)
-                        
-                        col_orig, col_warp = st.columns(2, gap="medium")
-                        with col_orig:
-                            st.markdown('<div class="section-label">Input Asli</div>', unsafe_allow_html=True)
-                            st.image(img_pil, use_container_width=True)
-                        with col_warp:
-                            st.markdown('<div class="section-label">Setelah Warp</div>', unsafe_allow_html=True)
-                            if ok:
-                                st.image(warped_np, use_container_width=True)
-                            else:
-                                st.error("❌ Gagal mendeteksi 4 sudut LJK.")
-                                continue
-                        
-                        with st.spinner("Mendeteksi nama, NIM, tanggal, jawaban..."):
-                            nama = scanner.detect_nama(warped_np)
-                            nim = scanner.detect_nim(warped_np)
-                            tanggal = scanner.detect_tanggal(warped_np)
-                            answers = scanner.detect_answers(warped_np, st.session_state.total_soal)
-                        
-                        correct, wrong, unanswered = 0, 0, 0
-                        for q, key in st.session_state.answer_key.items():
-                            s = answers.get(q)
-                            if s is None:
-                                unanswered += 1
-                            elif s == key:
-                                correct += 1
-                            else:
-                                wrong += 1
+                img_pil = Image.open(uploaded)
+                img_bgr = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
 
-                        scoring = st.session_state.scoring
-                        total_soal = st.session_state.total_soal
-                        if scoring == "standard":
-                            score = round(correct / total_soal * 100, 2) if total_soal > 0 else 0
-                        else:
-                            score = round(max(0, (correct - wrong * 0.25) / total_soal * 100), 2)
+                # Corner detection
+                with st.spinner("Mendeteksi 4 sudut LJK..."):
+                    selected = find_corner_bubbles(img_bgr, visualize=False)
+                    warped = warp_perspective(img_bgr, selected)
 
-                        if score >= 80:
-                            grade, grade_cls = 'A', 'badge-green'
-                        elif score >= 70:
-                            grade, grade_cls = 'B', 'badge-blue'
-                        elif score >= 60:
-                            grade, grade_cls = 'C', 'badge-amber'
-                        else:
-                            grade, grade_cls = 'D/E', 'badge-red'
+                col_orig, col_warp = st.columns(2, gap="medium")
+                with col_orig:
+                    st.markdown('<div class="section-label">Input Asli</div>', unsafe_allow_html=True)
+                    st.image(img_pil, use_container_width=True)
+                with col_warp:
+                    st.markdown('<div class="section-label">Setelah Warp Perspective</div>', unsafe_allow_html=True)
+                    if warped is not None and warped.shape[0] > 0:
+                        st.image(cv2.cvtColor(warped, cv2.COLOR_BGR2RGB), use_container_width=True)
+                    else:
+                        st.error("❌ Gagal mendeteksi 4 sudut LJK. Coba ulang dengan foto yang lebih jelas.")
+                        continue
 
-                        st.markdown(f"""
-                        <div class="metrics-row">
-                          <div class="metric-tile">
-                            <div class="t-val c-blue">{score}</div>
-                            <div class="t-lbl">Skor</div>
-                          </div>
-                          <div class="metric-tile">
-                            <div class="t-val c-green">{correct}</div>
-                            <div class="t-lbl">Benar</div>
-                          </div>
-                          <div class="metric-tile">
-                            <div class="t-val c-red">{wrong}</div>
-                            <div class="t-lbl">Salah</div>
-                          </div>
-                          <div class="metric-tile">
-                            <div class="t-val c-amber">{unanswered}</div>
-                            <div class="t-lbl">Kosong</div>
-                          </div>
-                          <div class="metric-tile">
-                            <span class="badge {grade_cls}" style="font-size:1.4rem;padding:6px 16px">{grade}</span>
-                            <div class="t-lbl" style="margin-top:8px">Grade</div>
-                          </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        st.markdown(f"""
-                        <div class="card-sm" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap">
-                          <div>
-                            <div class="section-label">Nama</div>
-                            <div style="font-family:'DM Serif Display',serif;font-size:1.1rem">{nama}</div>
-                          </div>
-                          <div>
-                            <div class="section-label">NIM</div>
-                            <div style="font-family:'JetBrains Mono',monospace;font-size:1rem;color:#7CA4D4">{nim}</div>
-                          </div>
-                          <div>
-                            <div class="section-label">Tanggal</div>
-                            <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem">{tanggal}</div>
-                          </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-
-                        record = {
-                            'filename': fname,
-                            'nama': nama,
-                            'nim': nim,
-                            'tanggal': tanggal,
-                            'correct': correct,
-                            'wrong': wrong,
-                            'unanswered': unanswered,
-                            'score': score,
-                            'total_soal': total_soal,
-                            'student_answers': {str(k): v for k, v in answers.items()},
-                            'answer_key': st.session_state.answer_key,
-                        }
-                        st.session_state.records.append(record)
-                        st.success(f"✅  `{fname}` berhasil disimpan.")
-
-                    except ImportError:
-                        st.error("❌ Module `scanner.py` tidak ditemukan.")
-                        st.info("📝 Pastikan `scanner.py` ada di direktori project.")
-                    except AttributeError as e:
-                        st.error(f"❌ Error: {str(e)}")
-                        st.info("📝 Pastikan semua function ada: warp_ljk, detect_nama, detect_nim, detect_tanggal, detect_answers")
-                    except Exception as e:
-                        st.error(f"❌ Error processing: {str(e)}")
-
-                except Exception as e:
-                    st.error(f"❌ Error opening image: {str(e)}")
+                # Save record (minimal untuk tracking)
+                record = {
+                    'filename': fname,
+                    'img_bgr': warped,
+                    'answer_key': st.session_state.answer_key,
+                    'total_soal': st.session_state.total_soal,
+                }
+                st.session_state.records.append(record)
+                st.success(f"✅ `{fname}` berhasil diproses.")
 
 # ══════════════════════════════════════════════════════════════
 #  STEP 3 — HANDWRITING OCR
 # ══════════════════════════════════════════════════════════════
 elif st.session_state.step == 'handwriting':
     st.markdown('<div class="section-label">Langkah 03</div>', unsafe_allow_html=True)
-    st.markdown('<div class="serif-title">Handwriting <span>OCR Training</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="page-subtitle">Train SVM model untuk pengenalan karakter tulisan tangan.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="serif-title">OCR <span>Tulisan Tangan</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {len(st.session_state.records)} lembar</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
-
-    c1, c2, _ = st.columns([1, 1, 4])
-    with c1:
-        if st.button("← Scan"):
-            st.session_state.step = 'scan'
-            st.rerun()
-    with c2:
-        if st.button("EDA →"):
-            st.session_state.step = 'eda'
-            st.rerun()
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    st.markdown("""
-    <div style="margin-bottom:1rem">
-      <div style="font-family:'DM Serif Display',serif;font-size:1rem;color:#EAE0CF;margin-bottom:4px">
-        Training SVM Model
-      </div>
-      <div style="font-size:0.82rem;color:#7288AE">Latih model SVM untuk OCR menggunakan EMNIST dataset.</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col_train, col_pred = st.columns(2, gap="large")
-
-    with col_train:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;
-          padding-bottom:12px;border-bottom:1px solid rgba(114,136,174,0.2)">
-          <div style="width:3px;height:22px;background:#7288AE;border-radius:2px"></div>
-          <div>
-            <div style="font-family:'DM Serif Display',serif;font-size:1rem;color:#EAE0CF">Train Model</div>
-            <div style="font-size:0.65rem;color:#4B5694;letter-spacing:0.1em;text-transform:uppercase;margin-top:2px">SVM + HOG</div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.button("🔄  Train OCR Model"):
-            with st.spinner("Training SVM... (tunggu beberapa menit)"):
-                try:
-                    import handwriting_ocr
-                    model, accuracy = handwriting_ocr.load_or_train()
-                    st.session_state.ocr_model = model
-                    st.session_state.ocr_accuracy = accuracy
-                    st.success(f"✅ Model trained! Akurasi: **{accuracy:.2%}**")
-                except ImportError:
-                    st.error("❌ Module `handwriting_ocr.py` tidak ditemukan.")
-                except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
-
-        if st.session_state.ocr_accuracy is not None:
-            st.markdown(f"""
-            <div class="metric-tile" style="text-align:center;padding:20px;margin-top:12px">
-              <div class="t-val c-green" style="font-size:2rem">{st.session_state.ocr_accuracy:.1%}</div>
-              <div class="t-lbl">Model Accuracy</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    with col_pred:
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.markdown("""
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;
-          padding-bottom:12px;border-bottom:1px solid rgba(114,136,174,0.2)">
-          <div style="width:3px;height:22px;background:#7288AE;border-radius:2px"></div>
-          <div>
-            <div style="font-family:'DM Serif Display',serif;font-size:1rem;color:#EAE0CF">Test Prediksi</div>
-            <div style="font-size:0.65rem;color:#4B5694;letter-spacing:0.1em;text-transform:uppercase;margin-top:2px">Upload digit</div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        uploaded_digit = st.file_uploader("Upload gambar digit (JPG/PNG)", type=["jpg","jpeg","png"], label_visibility="collapsed")
-
-        if uploaded_digit and st.session_state.ocr_model is not None:
-            try:
-                img = PILImage.open(uploaded_digit).convert('L')
-                st.image(img, caption="Input Digit", width=100)
-
-                try:
-                    from skimage.feature import hog
-                    import cv2
-                    
-                    img_arr = np.array(img)
-                    if img_arr.shape[0] != 28 or img_arr.shape[1] != 28:
-                        img_arr = cv2.resize(img_arr, (28, 28))
-
-                    features = hog(img_arr, orientations=9, pixels_per_cell=(4,4), cells_per_block=(2,2), visualize=False)
-                    features = features.reshape(1, -1)
-
-                    pred = st.session_state.ocr_model.predict(features)[0]
-
-                    st.markdown(f"""
-                    <div style="background:rgba(61,139,110,0.15);border:1px solid rgba(61,139,110,0.35);
-                      border-radius:10px;padding:14px;margin-top:12px">
-                      <div style="font-size:0.7rem;color:#4B5694;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">
-                        Prediksi
-                      </div>
-                      <div style="font-family:'DM Serif Display',serif;font-size:2.2rem;color:#6DBF9E">
-                        {chr(pred)}
-                      </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                except ImportError:
-                    st.error("❌ Libaries skimage/cv2 belum tersedia.")
-                except Exception as e:
-                    st.error(f"❌ Error predicting: {str(e)}")
-            except Exception as e:
-                st.error(f"❌ Error opening image: {str(e)}")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.info("💡 Module `handwriting_ocr.py` harus punya function `load_or_train()` yang return (model, accuracy).")
-
-# ══════════════════════════════════════════════════════════════
-#  STEP 4 — EDA
-# ══════════════════════════════════════════════════════════════
-elif st.session_state.step == 'eda':
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
 
     records = st.session_state.records
     if not records:
         st.warning("Belum ada data scan.")
-        if st.button("← Scan"):
-            st.session_state.step = 'scan'
-            st.rerun()
+        if st.button("← Scan"): st.session_state.step = 'scan'; st.rerun()
+        st.stop()
+
+    c1, c2, c3 = st.columns([1, 1, 5])
+    with c1:
+        if st.button("← Scan", use_container_width=True):
+            st.session_state.step = 'scan'; st.rerun()
+    with c2:
+        if st.button("Lihat Hasil →", use_container_width=True):
+            st.session_state.step = 'results'; st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Load model once
+    if st.session_state.bundle is None:
+        with st.spinner("Loading SVM model..."):
+            st.session_state.bundle = load_or_train()
+
+    bundle = st.session_state.bundle
+    if bundle is None:
+        st.error("❌ Gagal load model SVM. Pastikan `svm_emnist.pkl` ada di folder.")
+        st.stop()
+
+    # Process each record
+    for idx, record in enumerate(records):
+        if 'processed' in record:
+            continue
+
+        warped = record['img_bgr']
+        fname = record['filename']
+
+        with st.expander(f"📝 {fname}", expanded=(idx == 0)):
+            with st.spinner(f"OCR untuk {fname}..."):
+                # Detect NAMA
+                x1, y1, x2, y2 = ALL_ROIS['NAMA']
+                roi_nama = warped[y1:y2, x1:x2]
+                nama_text, _, _ = predict_text(roi_nama, bundle, label='NAMA')
+                nama_text = postprocess('NAMA', nama_text)
+
+                # Detect NIM
+                x1, y1, x2, y2 = ALL_ROIS['NIM']
+                roi_nim = warped[y1:y2, x1:x2]
+                nim_text, _, _ = predict_text(roi_nim, bundle, label='NIM')
+                nim_text = postprocess('NIM', nim_text)
+
+                # Detect TANGGAL
+                x1, y1, x2, y2 = ALL_ROIS['TANGGAL']
+                roi_tgl = warped[y1:y2, x1:x2]
+                tgl_text, _, _ = predict_text(roi_tgl, bundle, label='TANGGAL')
+                tgl_text = postprocess('TANGGAL', tgl_text)
+
+                # Detect KODE_KELAS
+                x1, y1, x2, y2 = ALL_ROIS['KODE_KELAS']
+                roi_kode = warped[y1:y2, x1:x2]
+                kode_text, _, _ = predict_text(roi_kode, bundle, label='KODE_KELAS')
+                kode_text = postprocess('KODE_KELAS', kode_text)
+
+                # Detect answers
+                answers = detect_answers(warped, st.session_state.total_soal)
+                benar, salah, kosong, score = calculate_score(
+                    answers,
+                    st.session_state.answer_key
+                )
+
+            # Display identity
+            st.markdown(f"""
+            <div class="card-sm" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap">
+              <div>
+                <div class="section-label">Nama</div>
+                <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#EAE0CF">{nama_text}</div>
+              </div>
+              <div>
+                <div class="section-label">NIM</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:1rem;color:#7CA4D4">{nim_text}</div>
+              </div>
+              <div>
+                <div class="section-label">Tanggal</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#EAE0CF">{tgl_text}</div>
+              </div>
+              <div>
+                <div class="section-label">Kode Kelas</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#7CA4D4">{kode_text}</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Score summary
+            st.markdown(f"""
+            <div class="metrics-row" style="grid-template-columns: repeat(4, 1fr)">
+              <div class="metric-tile">
+                <div class="t-val c-green">{benar}</div>
+                <div class="t-lbl">Benar</div>
+              </div>
+              <div class="metric-tile">
+                <div class="t-val c-red">{salah}</div>
+                <div class="t-lbl">Salah</div>
+              </div>
+              <div class="metric-tile">
+                <div class="t-val c-grey">{kosong}</div>
+                <div class="t-lbl">Kosong</div>
+              </div>
+              <div class="metric-tile">
+                <div class="t-val c-blue">{score:.1f}</div>
+                <div class="t-lbl">Score</div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Answer grid
+            st.markdown('<div class="section-label" style="margin-top:1.2rem">Detail Jawaban</div>', unsafe_allow_html=True)
+            key = st.session_state.answer_key
+            grid_html = '<div class="answer-grid">'
+            for q in range(1, st.session_state.total_soal + 1):
+                s_ans = answers.get(q)
+                k_ans = key.get(q, '?')
+                if s_ans is None:
+                    cls = "empty"; txt = f"{q}. —"
+                elif s_ans == k_ans:
+                    cls = "correct"; txt = f"{q}. {s_ans}"
+                else:
+                    cls = "wrong"; txt = f"{q}. {s_ans}"
+                grid_html += f'<div class="ans-cell {cls}">{txt}</div>'
+            grid_html += '</div>'
+            st.markdown(grid_html, unsafe_allow_html=True)
+
+            # Save to record
+            record['nama'] = nama_text
+            record['nim'] = nim_text
+            record['tanggal'] = tgl_text
+            record['kode_kelas'] = kode_text
+            record['answers'] = answers
+            record['score'] = score
+            record['benar'] = benar
+            record['salah'] = salah
+            record['kosong'] = kosong
+            record['processed'] = True
+
+# ══════════════════════════════════════════════════════════════
+#  STEP 4 — RESULTS (EDA)
+# ══════════════════════════════════════════════════════════════
+elif st.session_state.step == 'results':
+    records = st.session_state.records
+    
+    if not records or not all('processed' in r for r in records):
+        st.warning("Belum semua data diproses OCR.")
+        if st.button("← OCR"): st.session_state.step = 'handwriting'; st.rerun()
         st.stop()
 
     st.markdown('<div class="section-label">Langkah 04</div>', unsafe_allow_html=True)
-    st.markdown('<div class="serif-title">EDA & <span>Analitik Kelas</span></div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} · {st.session_state.kode_kelas}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="serif-title">Hasil & <span>Analitik Kelas</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {st.session_state.kode_kelas}</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    c1, _ = st.columns([1, 4])
+    c1, c2 = st.columns([1, 5])
     with c1:
-        if st.button("← Handwriting"):
-            st.session_state.step = 'handwriting'
-            st.rerun()
+        if st.button("← OCR", use_container_width=True):
+            st.session_state.step = 'handwriting'; st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    scores = [r['score'] for r in records]
-    total_soal = records[0]['total_soal']
+    # Convert to DataFrame
+    df_data = []
+    for r in records:
+        df_data.append({
+            'Nama': r.get('nama', ''),
+            'NIM': r.get('nim', ''),
+            'Tanggal': r.get('tanggal', ''),
+            'Benar': r.get('benar', 0),
+            'Salah': r.get('salah', 0),
+            'Kosong': r.get('kosong', 0),
+            'Score': r.get('score', 0),
+            'Grade': grade_from_score(r.get('score', 0)),
+            'Jawaban': r.get('answers', {}),
+            'Kunci': r.get('answer_key', {}),
+        })
 
+    df = pd.DataFrame(df_data)
+    scores = df['Score'].tolist()
+
+    # Summary metrics
     st.markdown(f"""
     <div class="metrics-row">
       <div class="metric-tile">
@@ -749,117 +892,155 @@ elif st.session_state.step == 'eda':
     """, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs(["📋  Tabel", "📈  Grafik", "💾  Export"])
+    
+    tab1, tab2, tab3 = st.tabs(["📋  Tabel Nilai", "📈  Grafik & Distribusi", "💾  Export"])
 
-    COLORS = {'navy':'#111844','mid':'#4B5694','steel':'#7288AE','cream':'#EAE0CF','green':'#6DBF9E','red':'#E07575','blue':'#7CA4D4','amber':'#D4A96A'}
+    COLORS = {
+        'navy': '#111844', 'mid': '#4B5694', 'steel': '#7288AE',
+        'cream': '#EAE0CF', 'green': '#6DBF9E', 'red': '#E07575',
+        'blue': '#7CA4D4', 'amber': '#D4A96A',
+    }
 
     def style_axes(ax):
         ax.set_facecolor('#0C1235')
-        for sp in ax.spines.values():
-            sp.set_color(COLORS['mid'])
+        for sp in ax.spines.values(): sp.set_color(COLORS['mid'])
         ax.tick_params(colors=COLORS['steel'], labelsize=8)
         ax.xaxis.label.set_color(COLORS['steel'])
         ax.yaxis.label.set_color(COLORS['steel'])
         ax.title.set_color(COLORS['cream'])
         ax.grid(axis='y', color=COLORS['mid'], alpha=0.2, linewidth=0.5)
 
+    # Tab 1 — Table
     with tab1:
-        df = pd.DataFrame([{
-            'Nama': r['nama'],
-            'NIM': r['nim'],
-            'Tanggal': r['tanggal'],
-            'Benar': r['correct'],
-            'Salah': r['wrong'],
-            'Kosong': r['unanswered'],
-            'Skor': r['score'],
-            'Grade': 'A' if r['score']>=80 else 'B' if r['score']>=70 else 'C' if r['score']>=60 else 'D' if r['score']>=50 else 'E'
-        } for r in records])
-        st.dataframe(df, use_container_width=True, height=400)
+        df_tabel = df[['Nama', 'NIM', 'Tanggal', 'Benar', 'Salah', 'Kosong', 'Score', 'Grade']].copy()
+        df_tabel = df_tabel.sort_values('Score', ascending=False).reset_index(drop=True)
+        df_tabel.index = df_tabel.index + 1
+        st.dataframe(df_tabel, use_container_width=True, height=400)
 
+    # Tab 2 — Charts
     with tab2:
         col_ch1, col_ch2 = st.columns(2, gap="large")
+        
         with col_ch1:
             fig, ax = plt.subplots(figsize=(6, 4), facecolor='#111844')
             style_axes(ax)
-            n, bins, patches = ax.hist(scores, bins=range(0, 105, 10), edgecolor='#111844', linewidth=0.8)
+            n, bins, patches = ax.hist(scores, bins=range(0, 105, 10),
+                                        edgecolor='#111844', linewidth=0.8)
             for patch in patches:
                 patch.set_facecolor(COLORS['mid'])
                 patch.set_alpha(0.85)
-            ax.axvline(np.mean(scores), color=COLORS['amber'], lw=1.5, linestyle='--', label=f'Mean = {np.mean(scores):.1f}')
-            ax.set_xlabel("Nilai")
-            ax.set_ylabel("Jumlah")
+            ax.axvline(np.mean(scores), color=COLORS['amber'], lw=1.5,
+                       linestyle='--', label=f'Mean = {np.mean(scores):.1f}')
+            ax.set_xlabel("Nilai"); ax.set_ylabel("Jumlah")
             ax.set_title("Distribusi Nilai", fontsize=11, fontweight='bold', pad=10)
-            ax.legend(facecolor='#0C1235', labelcolor=COLORS['cream'], fontsize=8, framealpha=0.8)
+            ax.legend(facecolor='#0C1235', labelcolor=COLORS['cream'],
+                      fontsize=8, framealpha=0.8)
             plt.tight_layout(pad=1.5)
-            st.pyplot(fig)
-            plt.close(fig)
+            st.pyplot(fig); plt.close(fig)
 
         with col_ch2:
-            grades = {'A (≥80)':0,'B (70-79)':0,'C (60-69)':0,'D (50-59)':0,'E (<50)':0}
+            # Gunakan grade_from_score dari eda.py (threshold: 85/75/65/55)
+            grade_dist = {'A (≥85)':0,'B (75-84)':0,'C (65-74)':0,'D (55-64)':0,'E (<55)':0}
             for s in scores:
-                if s>=80:
-                    grades['A (≥80)']+=1
-                elif s>=70:
-                    grades['B (70-79)']+=1
-                elif s>=60:
-                    grades['C (60-69)']+=1
-                elif s>=50:
-                    grades['D (50-59)']+=1
-                else:
-                    grades['E (<50)']+=1
-            lp = [k for k,v in grades.items() if v>0]
-            sp = [v for v in grades.values() if v>0]
+                g = grade_from_score(s)
+                if g == 'A': grade_dist['A (≥85)']+=1
+                elif g == 'B': grade_dist['B (75-84)']+=1
+                elif g == 'C': grade_dist['C (65-74)']+=1
+                elif g == 'D': grade_dist['D (55-64)']+=1
+                else: grade_dist['E (<55)']+=1
+            lp = [k for k,v in grade_dist.items() if v>0]
+            sp = [v for v in grade_dist.values() if v>0]
             pie_colors = [COLORS['green'],COLORS['blue'],COLORS['amber'],COLORS['red'],'#9B7E7E'][:len(lp)]
             fig2, ax2 = plt.subplots(figsize=(5, 4), facecolor='#111844')
             ax2.set_facecolor('#111844')
-            wedges, texts, autotexts = ax2.pie(sp, labels=lp, colors=pie_colors, autopct='%1.0f%%', startangle=90,
-                                                  textprops={'color':COLORS['cream'],'fontsize':8},
-                                                  wedgeprops={'linewidth':2,'edgecolor':'#111844'})
-            for at in autotexts:
-                at.set_color('#111844')
-                at.set_fontweight('bold')
-            ax2.set_title("Distribusi Grade", color=COLORS['cream'], fontsize=11, fontweight='bold', pad=10)
+            wedges, texts, autotexts = ax2.pie(
+                sp, labels=lp, colors=pie_colors,
+                autopct='%1.0f%%', startangle=90,
+                textprops={'color': COLORS['cream'], 'fontsize': 8},
+                wedgeprops={'linewidth': 2, 'edgecolor': '#111844'}
+            )
+            for at in autotexts: at.set_color('#111844'); at.set_fontweight('bold')
+            ax2.set_title("Distribusi Grade", color=COLORS['cream'], fontsize=11,
+                          fontweight='bold', pad=10)
             plt.tight_layout(pad=1.5)
-            st.pyplot(fig2)
-            plt.close(fig2)
+            st.pyplot(fig2); plt.close(fig2)
 
+        if len(records) > 1:
+            st.markdown('<div class="section-label" style="margin-top:1rem">Tingkat Kesulitan per Soal</div>', unsafe_allow_html=True)
+            rates = []
+            for q in range(1, st.session_state.total_soal + 1):
+                correct = sum(1 for r in records 
+                            if r['answers'].get(q) == r['answer_key'].get(q))
+                rate = correct / len(records) * 100 if records else 0
+                rates.append(rate)
+            
+            bar_colors = [COLORS['green'] if v>=70 else COLORS['amber'] if v>=40 else COLORS['red'] for v in rates]
+            fig3, ax3 = plt.subplots(figsize=(14, 3), facecolor='#111844')
+            style_axes(ax3)
+            ax3.bar(range(1, st.session_state.total_soal+1), rates, color=bar_colors, width=0.7, edgecolor='none')
+            ax3.set_xlabel("Nomor Soal"); ax3.set_ylabel("% Benar")
+            ax3.set_title("Persentase Benar per Soal", fontsize=11, fontweight='bold', pad=8)
+            ax3.set_ylim(0, 108)
+            ax3.axhline(70, color=COLORS['green'], lw=0.8, linestyle=':', alpha=0.5)
+            ax3.axhline(40, color=COLORS['amber'], lw=0.8, linestyle=':', alpha=0.5)
+            plt.tight_layout(pad=1.5)
+            st.pyplot(fig3); plt.close(fig3)
+
+            st.markdown("""
+            <div style="display:flex;gap:16px;margin-top:4px">
+              <span style="font-size:0.72rem;color:#6DBF9E">■ Mudah (≥70%)</span>
+              <span style="font-size:0.72rem;color:#D4A96A">■ Sedang (40-69%)</span>
+              <span style="font-size:0.72rem;color:#E07575">■ Sulit (&lt;40%)</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Tab 3 — Export
     with tab3:
         st.markdown('<div class="section-label">Download Hasil</div>', unsafe_allow_html=True)
         st.markdown('<div class="card">', unsafe_allow_html=True)
 
-        df_rekap = pd.DataFrame([{
-            'Nama': r['nama'],
-            'NIM': r['nim'],
-            'Tanggal': r['tanggal'],
-            'Benar': r['correct'],
-            'Salah': r['wrong'],
-            'Kosong': r['unanswered'],
-            'Skor': r['score'],
-            'Grade': 'A' if r['score']>=80 else 'B' if r['score']>=70 else 'C' if r['score']>=60 else 'D' if r['score']>=50 else 'E'
-        } for r in records])
+        df_rekap = df[['Nama', 'NIM', 'Tanggal', 'Benar', 'Salah', 'Kosong', 'Score', 'Grade']].copy()
 
-        df_stats = pd.DataFrame([{'Metrik':m,'Nilai':v} for m,v in {
+        rows_detail = []
+        for r in records:
+            row = {'NIM': r.get('nim', ''), 'Nama': r.get('nama', ''), 'Score': r.get('score', 0)}
+            for q in range(1, st.session_state.total_soal+1):
+                row[f'Q{q}'] = r['answers'].get(q, '-')
+                row[f'Q{q}_kunci'] = r['answer_key'].get(q, '?')
+            rows_detail.append(row)
+        df_detail = pd.DataFrame(rows_detail)
+
+        df_stats = pd.DataFrame([{'Metrik': m, 'Nilai': v} for m, v in {
             'Total Mahasiswa': len(records),
             'Rata-rata': round(np.mean(scores), 2),
             'Tertinggi': max(scores),
             'Terendah': min(scores),
             'Std Deviasi': round(np.std(scores), 2),
+            'Varians': round(np.var(scores), 2),
         }.items()])
 
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine='openpyxl') as writer:
             df_rekap.to_excel(writer, sheet_name='Rekap Nilai', index=False)
-            df_stats.to_excel(writer, sheet_name='Statistik', index=False)
+            df_detail.to_excel(writer, sheet_name='Detail Jawaban', index=False)
+            df_stats.to_excel(writer, sheet_name='Statistik Kelas', index=False)
         buf.seek(0)
 
-        fname = f"hasil_{st.session_state.kode_kelas}.xlsx"
-        st.download_button("⬇  Download Excel", data=buf, file_name=fname,
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        fname = f"hasil_{st.session_state.kode_kelas}_{st.session_state.sesi_nama.replace(' ','_')}.xlsx"
+        st.download_button("⬇  Download Excel (3 Sheet)", data=buf, file_name=fname,
+                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                           use_container_width=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.download_button("⬇  Download CSV",
-                           df_rekap.to_csv(index=False).encode(),
-                           file_name=f"rekap_{st.session_state.kode_kelas}.csv",
-                           mime="text/csv")
-
+        cc1, cc2 = st.columns(2)
+        with cc1:
+            st.download_button("⬇  CSV Rekap Nilai",
+                               df_rekap.to_csv(index=False).encode(),
+                               file_name=f"rekap_{st.session_state.kode_kelas}.csv",
+                               mime="text/csv", use_container_width=True)
+        with cc2:
+            st.download_button("⬇  CSV Detail Jawaban",
+                               df_detail.to_csv(index=False).encode(),
+                               file_name=f"detail_{st.session_state.kode_kelas}.csv",
+                               mime="text/csv", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
