@@ -576,18 +576,18 @@ if st.session_state.step == 'setup':
             st.markdown('<div class="serif-title">Scan <span>Lembar Jawaban</span></div>', unsafe_allow_html=True)
             st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {st.session_state.kode_kelas} &nbsp;·&nbsp; {st.session_state.total_soal} soal &nbsp;·&nbsp; {len(st.session_state.records)} lembar ter-scan</div>', unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
-
-    c1, c2, c3 = st.columns([1, 1, 5])
-    with c1:
-        if st.button("← Setup", width='stretch'):
-            st.session_state.step = 'setup'
-            st.rerun()
-    with c2:
-        if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, width='stretch'):
-            st.session_state.step = 'handwriting'
-            st.rerun()
-
-    st.markdown("<br>", unsafe_allow_html=True)
+            
+            c1, c2, c3 = st.columns([1, 1, 5])
+            with c1:
+                if st.button("← Setup", width='stretch'):
+                    st.session_state.step = 'setup'
+                    st.rerun()
+            with c2:
+                if st.button("Lihat OCR →", disabled=len(st.session_state.records) == 0, width='stretch'):
+                    st.session_state.step = 'handwriting'
+                    st.rerun()
+        
+            st.markdown("<br>", unsafe_allow_html=True)
 
     st.markdown("""
     <div style="margin-bottom:0.6rem">
