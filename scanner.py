@@ -29,29 +29,35 @@ def get_bubble_range(gray):
 
 
 def scan_grid(gray, num_cols, num_rows, labels, z_thresh=1.2, z_gap=0.5, per_row=False):
-    eq = apply_clahe(gray)
-    inv = cv2.bitwise_not(eq)
-    h, w = gray.shape
-    b0, b1 = get_bubble_range(gray)
+    gray = cv2.filter2D(gray, -1, np.array([[0,-1,0],[-1,5,-1],[0,-1,0]]))
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    gray = clahe.apply(gray)
+    
+    _, bw = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    
+    row_proj = np.sum(bw, axis=1)
+    rows = np.where(row_proj > (np.max(row_proj) * 0.1))[0]
+    b0, b1 = rows[0], rows[-1]
+    
     bh = b1 - b0
     row_h = bh / num_rows
-    col_w = w / num_cols
-
-    density_map = np.zeros((num_rows, num_cols), dtype=float)
+    col_w = gray.shape[1] / num_cols
+    
     raw = np.zeros((num_rows, num_cols), dtype=float)
 
     for r in range(num_rows):
         for c in range(num_cols):
-            y0 = b0 + int(r * row_h) + 2
-            y1b = b0 + int((r + 1) * row_h) - 2
             x0 = int(c * col_w) + 2
-            x1b = int((c + 1) * col_w) - 2
-            cell = inv[y0:y1b, x0:x1b]
-            if cell.size == 0:
-                continue
+            x1 = int((c + 1) * col_w) - 2
+            y0 = b0 + int(r * row_h) + 2
+            y1 = b0 + int((r + 1) * row_h) - 2
+            
+            cell = bw[y0:y1, x0:x1]
+            if cell.size == 0: continue
+            
             ch, cw = cell.shape
-            cx = cell[ch // 4:3 * ch // 4, cw // 4:3 * cw // 4]
-            raw[r, c] = float(np.mean(cx)) if cx.size > 0 else 0.0
+            cx = cell[ch//4:3*ch//4, cw//4:3*cw//4]
+            raw[r, c] = np.mean(cx)
 
     results = []
     if not per_row:
@@ -185,35 +191,25 @@ def detect_tanggal(warped):
 
 
 def detect_answers(warped, total_soal=50):
-    ROI_JAWABAN = [
-        ('1-10', 70, 930, 190, 1150, 1),
-        ('11-20', 70, 1160, 190, 1390, 11),
-        ('21-30', 250, 930, 380, 1150, 21),
-        ('31-40', 259, 1160, 380, 1390, 31),
-        ('41-50', 450, 930, 580, 1150, 41),
-        ('51-60', 450, 1160, 580, 1390, 51),
-        ('61-70', 650, 930, 780, 1150, 61),
-        ('71-80', 650, 1160, 780, 1390, 71),
-        ('81-90', 830, 930, 950, 1150, 81),
-        ('91-100', 830, 1160, 950, 1390, 91),
-    ]
+    ROI_JAWABAN = [...] 
     
     all_answers = {}
     soal_done = 0
     heatmap_list = []
     
     for label, x1, y1, x2, y2, q_start in ROI_JAWABAN:
-        if soal_done >= total_soal:
-            break
+        if soal_done >= total_soal: break
         
-        soal_di_blok = min(10, total_soal - soal_done)
-        roi_bgr = warped[y1:y2, x1:x2]
+        margin = 10
+        roi_bgr = warped[y1-margin:y2+margin, x1-margin:x2+margin]
+        
         roi_gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
         
         r_blok, d_map, _, _, _, _ = scan_grid(
-            roi_gray, num_cols=5, num_rows=10,
-            labels=CHOICES, per_row=True)
-        
+            roi_gray, num_cols=5, num_rows=10, 
+            labels=CHOICES, per_row=True
+        )
+                
         heatmap_list.append(d_map[:soal_di_blok])
         
         r_aktif = r_blok[:soal_di_blok]
