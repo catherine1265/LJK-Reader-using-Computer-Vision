@@ -616,7 +616,7 @@ if st.session_state.step == 'setup':
     st.markdown("<br>", unsafe_allow_html=True)
     col_btn, _ = st.columns([1, 3])
     with col_btn:
-        if st.button("Mulai Scan →", use_container_width=True):
+        if st.button("Mulai Scan  →", disabled=len(answer_key) == 0, width='stretch'):
             if not answer_key:
                 st.error("Kunci jawaban belum diisi.")
             else:
@@ -743,11 +743,11 @@ elif st.session_state.step == 'handwriting':
 
     c1, c2, c3 = st.columns([1, 1, 5])
     with c1:
-        if st.button("← Scan", use_container_width=True):
+        if st.button("← Scan", width='stretch'):
             st.session_state.step = 'scan'
             st.rerun()
     with c2:
-        if st.button("Lihat Hasil →", use_container_width=True):
+        if st.button("Lihat Hasil →", width='stretch'):
             st.session_state.step = 'results'
             st.rerun()
 
@@ -1023,7 +1023,7 @@ elif st.session_state.step == 'results':
         })
 
     df = pd.DataFrame(summary_data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)
 
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(
