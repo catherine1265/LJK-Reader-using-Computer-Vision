@@ -1,6 +1,6 @@
 import os
 
-MODEL_PATH = 'models/svm_emnist.pkl'
+MODEL_PATH = 'svm_emnist.pkl'
 SAVE_DIR = 'dataset/chars'
 os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
 os.makedirs(SAVE_DIR, exist_ok=True)
