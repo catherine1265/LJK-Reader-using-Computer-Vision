@@ -15,6 +15,7 @@ from corner_detection import find_corner_bubbles, warp_perspective
 from scanner import detect_answers, detect_nama, detect_nim, detect_tanggal
 from handwriting_ocr import load_or_train, predict_text, postprocess
 from eda import grade_from_score, calculate_score
+from utils import show_heatmap
 
 # ─── PAGE CONFIG ────────────────────────────────────────────
 st.set_page_config(
@@ -406,7 +407,7 @@ with st.sidebar:
 
     records = st.session_state.records
     if records:
-        scores = [r.get('score', 0) for r in records]
+        scores = [r.get('score', 0) for r in records if r.get('processed')]
         st.markdown(f'<div class="section-label">Sesi Aktif</div>', unsafe_allow_html=True)
         st.markdown(f"""
         <div class="card-sm" style="margin-bottom:8px">
@@ -420,7 +421,7 @@ with st.sidebar:
               <div style="font-size:0.65rem;color:#4B5694;text-transform:uppercase;letter-spacing:0.1em">Scanned</div>
             </div>
             <div style="text-align:center">
-              <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:#7CA4D4">{np.mean(scores):.1f}</div>
+              <div style="font-family:'DM Serif Display',serif;font-size:1.5rem;color:#7CA4D4">{np.mean(scores) if scores else 0.0:.1f}</div>
               <div style="font-size:0.65rem;color:#4B5694;text-transform:uppercase;letter-spacing:0.1em">Avg</div>
             </div>
           </div>
@@ -657,19 +658,20 @@ elif st.session_state.step == 'scan':
                         st.error("❌ Gagal mendeteksi 4 sudut LJK. Coba ulang dengan foto yang lebih jelas.")
                         continue
 
-                # Save record (minimal untuk tracking)
+                # Save record
                 record = {
                     'filename': fname,
                     'img_bgr': warped,
                     'answer_key': st.session_state.answer_key,
                     'total_soal': st.session_state.total_soal,
+                    'processed': False
                 }
                 st.session_state.records.append(record)
                 st.success(f"✅ `{fname}` berhasil diproses.")
 
 elif st.session_state.step == 'handwriting':
     st.markdown('<div class="section-label">Langkah 03</div>', unsafe_allow_html=True)
-    st.markdown('<div class="serif-title">OCR <span>Tulisan Tangan</span></div>', unsafe_allow_html=True)
+    st.markdown('<div class="serif-title">OCR <span>Tulisan Tangan & OMR</span></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="page-subtitle">{st.session_state.sesi_nama} &nbsp;·&nbsp; {len(st.session_state.records)} lembar</div>', unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -701,64 +703,83 @@ elif st.session_state.step == 'handwriting':
 
     # Process each record
     for idx, record in enumerate(records):
-        if 'processed' in record:
-            continue
-
         warped = record['img_bgr']
         fname = record['filename']
 
-        with st.expander(f"📝 {fname}", expanded=(idx == 0)):
-            with st.spinner(f"OCR untuk {fname}..."):
-                # Detect NAMA
-                x1, y1, x2, y2 = ALL_ROIS['NAMA']
-                roi_nama = warped[y1:y2, x1:x2]
-                nama_text, _, _ = predict_text(roi_nama, bundle, label='NAMA')
-                nama_text = postprocess('NAMA', nama_text)
+        with st.expander(f"📝 {fname}", expanded=(not record.get('processed', False))):
+            if not record.get('processed', False):
+                with st.spinner(f"Memproses data & OMR untuk {fname}..."):
+                    # Detect NAMA & Heatmap Nama dari scanner.py
+                    nama_text, density_nama = detect_nama(warped)
+                    
+                    # Detect NIM & Heatmap NIM dari scanner.py
+                    nim_text, density_nim = detect_nim(warped)
+                    
+                    # Detect TANGGAL & Heatmap Tanggal dari scanner.py
+                    tgl_text, density_tanggal = detect_tanggal(warped)
 
-                # Detect NIM
-                x1, y1, x2, y2 = ALL_ROIS['NIM']
-                roi_nim = warped[y1:y2, x1:x2]
-                nim_text, _, _ = predict_text(roi_nim, bundle, label='NIM')
-                nim_text = postprocess('NIM', nim_text)
+                    # Detect KODE_KELAS (Tetap via OCR digital)
+                    x1, y1, x2, y2 = ALL_ROIS['KODE_KELAS']
+                    roi_kode = warped[y1:y2, x1:x2]
+                    kode_text, _, _ = predict_text(roi_kode, bundle, label='KODE_KELAS')
+                    kode_text = postprocess('KODE_KELAS', kode_text)
 
-                # Detect TANGGAL
-                x1, y1, x2, y2 = ALL_ROIS['TANGGAL']
-                roi_tgl = warped[y1:y2, x1:x2]
-                tgl_text, _, _ = predict_text(roi_tgl, bundle, label='TANGGAL')
-                tgl_text = postprocess('TANGGAL', tgl_text)
+                    # Detect answers & Heatmap Jawaban dari scanner.py
+                    answers, density_jawaban = detect_answers(warped, st.session_state.total_soal)
+                    benar, salah, kosong, score = calculate_score(
+                        answers,
+                        st.session_state.answer_key
+                    )
 
-                # Detect KODE_KELAS
-                x1, y1, x2, y2 = ALL_ROIS['KODE_KELAS']
-                roi_kode = warped[y1:y2, x1:x2]
-                kode_text, _, _ = predict_text(roi_kode, bundle, label='KODE_KELAS')
-                kode_text = postprocess('KODE_KELAS', kode_text)
-
-                # Detect answers (🟢 Bug fixed from detect_answers -> extract_answers)
-                # Menggunakan fungsi deteksi LJK asli dari scanner.py
-                answers = detect_answers(warped, st.session_state.total_soal)
-                benar, salah, kosong, score = calculate_score(
-                    answers,
-                    st.session_state.answer_key
-                )
+                    # Save data internal ke record
+                    record['nama'] = nama_text
+                    record['nim'] = nim_text
+                    record['tanggal'] = tgl_text
+                    record['kode_kelas'] = kode_text
+                    record['answers'] = answers
+                    record['score'] = score
+                    record['benar'] = benar
+                    record['salah'] = salah
+                    record['kosong'] = kosong
+                    record['density_nama'] = density_nama
+                    record['density_nim'] = density_nim
+                    record['density_tanggal'] = density_tanggal
+                    record['density_jawaban'] = density_jawaban
+                    record['processed'] = True
+            else:
+                # Muat dari memori jika sudah diproses sebelumnya
+                nama_text = record['nama']
+                nim_text = record['nim']
+                tgl_text = record['tanggal']
+                kode_text = record['kode_kelas']
+                answers = record['answers']
+                benar = record['benar']
+                salah = record['salah']
+                kosong = record['kosong']
+                score = record['score']
+                density_nama = record['density_nama']
+                density_nim = record['density_nim']
+                density_tanggal = record['density_tanggal']
+                density_jawaban = record['density_jawaban']
 
             # Display identity
             st.markdown(f"""
             <div class="card-sm" style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap">
               <div>
-                <div class="section-label">Nama</div>
-                <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#EAE0CF">{nama_text}</div>
+                <div class="section-label">Nama (OMR)</div>
+                <div style="font-family:'DM Serif Display',serif;font-size:1.1rem;color:#EAE0CF">{nama_text if nama_text else "—"}</div>
               </div>
               <div>
-                <div class="section-label">NIM</div>
-                <div style="font-family:'JetBrains Mono',monospace;font-size:1rem;color:#7CA4D4">{nim_text}</div>
+                <div class="section-label">NIM (OMR)</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:1rem;color:#7CA4D4">{nim_text if nim_text else "—"}</div>
               </div>
               <div>
-                <div class="section-label">Tanggal</div>
-                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#EAE0CF">{tgl_text}</div>
+                <div class="section-label">Tanggal (OMR)</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#EAE0CF">{tgl_text if tgl_text else "—"}</div>
               </div>
               <div>
                 <div class="section-label">Kode Kelas</div>
-                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#7CA4D4">{kode_text}</div>
+                <div style="font-family:'JetBrains Mono',monospace;font-size:0.9rem;color:#7CA4D4">{kode_text if kode_text else "—"}</div>
               </div>
             </div>
             """, unsafe_allow_html=True)
@@ -804,21 +825,87 @@ elif st.session_state.step == 'handwriting':
             grid_html += '</div>'
             st.markdown(grid_html, unsafe_allow_html=True)
 
-            # Save to record
-            record['nama'] = nama_text
-            record['nim'] = nim_text
-            record['tanggal'] = tgl_text
-            record['kode_kelas'] = kode_text
-            record['answers'] = answers
-            record['score'] = score
-            record['benar'] = benar
-            record['salah'] = salah
-            record['kosong'] = kosong
-            record['processed'] = True
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            # Visualisasi Heatmap per dokumen menggunakan st.tabs
+            st.markdown('<div class="section-label">🔥 Analisis Heatmap Kepadatan Piksel</div>', unsafe_allow_html=True)
+            h_tab1, h_tab2, h_tab3, h_tab4 = st.tabs(["Nama", "NIM", "Tanggal", "Jawaban OMR"])
+            
+            with h_tab1:
+                ALPHABET = list('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+                show_heatmap(
+                    density_map=density_nama,
+                    title=f"Heatmap Nama OMR ({nama_text})",
+                    y_labels=ALPHABET,
+                    x_labels=[f"{i+1}" for i in range(20)],
+                    cmap='RdYlGn'
+                )
+            with h_tab2:
+                show_heatmap(
+                    density_map=density_nim,
+                    title=f"Heatmap NIM OMR ({nim_text})",
+                    y_labels=[str(i) for i in range(10)],
+                    x_labels=[f"{i+1}" for i in range(10)],
+                    cmap='RdYlGn'
+                )
+            with h_tab3:
+                show_heatmap(
+                    density_map=density_tanggal,
+                    title=f"Heatmap Tanggal OMR ({tgl_text})",
+                    y_labels=[str(i) for i in range(10)],
+                    x_labels=[f"{i+1}" for i in range(6)],
+                    cmap='RdYlGn'
+                )
+            with h_tab4:
+                show_heatmap(
+                    density_map=density_jawaban,
+                    title="Heatmap Lembar Jawaban (1-50)",
+                    y_labels=[f"Soal {i+1}" for i in range(len(density_jawaban))],
+                    x_labels=['A', 'B', 'C', 'D', 'E'],
+                    cmap='jet'
+                )
 
 elif st.session_state.step == 'results':
+    st.markdown('<div class="section-label">Langkah 04</div>', unsafe_allow_html=True)
+    st.markdown('<div class="serif-title">Ringkasan <span>Hasil Akhir</span></div>', unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+    
     records = st.session_state.records
     
-    if not records or not all('processed' in r for r in records):
+    if not records or not all(r.get('processed', False) for r in records):
         st.warning("Belum semua data diproses OCR.")
         if st.button("← OCR"): st.session_state.step = 'handwriting'; st.rerun()
+        st.stop()
+
+    if st.button("← Kembali ke OCR", use_container_width=False):
+        st.session_state.step = 'handwriting'; st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Transformasi records data ke pandas DataFrame untuk visualisasi ringkasan tabel
+    summary_data = []
+    for r in records:
+        summary_data.append({
+            'File': r['filename'],
+            'Nama': r['nama'],
+            'NIM': r['nim'],
+            'Tanggal': r['tanggal'],
+            'Kelas': r['kode_kelas'],
+            'Benar': r['benar'],
+            'Salah': r['salah'],
+            'Kosong': r['kosong'],
+            'Score': round(r['score'], 2),
+            'Grade': grade_from_score(r['score'])
+        })
+        
+    df = pd.DataFrame(summary_data)
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    # Menyediakan file CSV untuk di-download
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="📥 Download Hasil Rekapan (CSV)",
+        data=csv,
+        file_name=f"Rekap_Nilai_{st.session_state.kode_kelas or 'LJK'}.csv",
+        mime='text/csv',
+    )
