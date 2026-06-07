@@ -12,7 +12,7 @@ import matplotlib.gridspec as gridspec
 # ─── IMPORT MODULES ─────────────────────────────────────────
 from config import ALL_ROIS
 from corner_detection import find_corner_bubbles, warp_perspective
-from bubble_detection import preprocess_char, collect_from_uploads, preview_dataset
+from scanner import detect_answers, detect_nama, detect_nim, detect_tanggal
 from handwriting_ocr import load_or_train, predict_text, postprocess
 from eda import grade_from_score, calculate_score
 
@@ -734,7 +734,8 @@ elif st.session_state.step == 'handwriting':
                 kode_text = postprocess('KODE_KELAS', kode_text)
 
                 # Detect answers (🟢 Bug fixed from detect_answers -> extract_answers)
-                answers = extract_answers(warped, st.session_state.total_soal)
+                # Menggunakan fungsi deteksi LJK asli dari scanner.py
+                answers = detect_answers(warped, st.session_state.total_soal)
                 benar, salah, kosong, score = calculate_score(
                     answers,
                     st.session_state.answer_key
