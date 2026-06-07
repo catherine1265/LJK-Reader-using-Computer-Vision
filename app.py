@@ -12,7 +12,7 @@ import matplotlib.gridspec as gridspec
 # ─── IMPORT MODULES ─────────────────────────────────────────
 from config import ALL_ROIS
 from corner_detection import find_corner_bubbles, warp_perspective
-from bubble_detection import extract_answers 
+from bubble_detection import preprocess_char, collect_from_uploads, preview_dataset
 from handwriting_ocr import load_or_train, predict_text, postprocess
 from eda import grade_from_score, calculate_score
 
