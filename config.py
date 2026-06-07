@@ -1,8 +1,12 @@
 import os
 
-MODEL_PATH = './svm_emnist.pkl'
+MODEL_PATH = 'svm_emnist.pkl'
 SAVE_DIR = 'dataset/chars'
-os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+
+if os.path.dirname(MODEL_PATH):
+    os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
+
+os.makedirs(SAVE_DIR, exist_ok=True)
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 CHAR_H, CHAR_W = 32, 32
