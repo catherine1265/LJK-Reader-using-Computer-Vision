@@ -571,10 +571,10 @@ if st.session_state.step == 'setup':
     st.markdown("<br>", unsafe_allow_html=True)
     col_btn, _ = st.columns([1, 3])
     with col_btn:
-        if st.button("Mulai Scan  →", disabled=len(answer_key) == 0, use_container_width=True):
-            st.session_state.answer_key = answer_key
-            st.session_state.step = 'scan'
-            st.rerun()
+        if st.button("Mulai Scan  →", disabled=len(answer_key) == 0, width='stretch'):
+        if st.button("← Setup", width='stretch'):
+        if st.button("Lihat OCR →", disabled=..., width='stretch'):
+        if st.button("← Kembali ke OCR", width='content'):
 
 
 elif st.session_state.step == 'scan':
@@ -649,7 +649,8 @@ elif st.session_state.step == 'scan':
                 col_orig, col_warp = st.columns(2, gap="medium")
                 with col_orig:
                     st.markdown('<div class="section-label">Input Asli</div>', unsafe_allow_html=True)
-                    st.image(img_pil, use_container_width=True)
+                    st.image(img_pil, width='stretch')
+                    st.image(cv2.cvtColor(warped, cv2.COLOR_BGR2RGB), width='stretch')
                 with col_warp:
                     st.markdown('<div class="section-label">Setelah Warp Perspective</div>', unsafe_allow_html=True)
                     if warped is not None and warped.shape[0] > 0:
