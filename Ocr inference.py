@@ -1,7 +1,5 @@
 import cv2
 import numpy as np
-from skimage.feature import hog
-from training import load_model, extract_hog
 from config import BUBBLE_ROIS, KUNCI_JAWABAN
 
 
@@ -24,13 +22,6 @@ def detect_bubble_mark(page, q, opt):
 
 def extract_answers(page, bundle=None):
     all_answers = {}
-    
-    if bundle is None:
-        bundle = load_model()
-        if bundle is None:
-            return all_answers
-    
-    clf = bundle['clf']
     
     for q in range(1, 51):
         for opt in ['A', 'B', 'C', 'D']:
