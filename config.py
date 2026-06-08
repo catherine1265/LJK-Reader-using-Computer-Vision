@@ -24,7 +24,7 @@ ALL_ROIS = {
     'NAMA_MATA_KULIAH': (540, 545, 940, 625),
     'KODE_KELAS': (540, 658, 740, 725),
     'RUANGAN': (810, 658, 960, 725),
-    'NO_MEJA': (810, 760, 960, 830),
+    'NO_MEJA': (810, 750, 960, 850),
 }
 
 HANDWRITING_ROIS = [
