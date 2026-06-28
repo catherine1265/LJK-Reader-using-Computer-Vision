@@ -44,6 +44,7 @@ BUBBLE_COLS = {
     'B': 650,
     'C': 750,
     'D': 850,
+    'E': 950,  
 }
 
 BUBBLE_ROIS = {}
