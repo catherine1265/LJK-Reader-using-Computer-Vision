@@ -48,7 +48,7 @@ BUBBLE_COLS = {
 }
 
 BUBBLE_ROIS = {}
-for q in range(1, 51):
+for q in range(1, 101):
     row = (q - 1) // 10
     col_in_group = (q - 1) % 10
     y = 700 + col_in_group * 60
